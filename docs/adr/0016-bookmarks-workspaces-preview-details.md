@@ -14,7 +14,7 @@ M6-WP3 (seconda metà) aggiunge segnalibri, layout salvati e anteprima al passag
 
 ## Decisione
 
-**`.memobrain/bookmarks.json`** — `{ "version": 1, "items": [...] }`, stessa forma di Obsidian (`file`, `folder`, `search`, `graph`, `group`). `file`: `path` e `subpath` (`#Titolo` oppure `#^id`); `search`: `query`; `graph`: `title` e `options` (oggetto opaco); `group`: `title` e `items` annidati. Campi e tipi sconosciuti sono conservati in scrittura; elementi malformati di tipo noto sono scartati. Gli elementi non hanno id: si indirizzano per percorso di indici. Rename/spostamento aggiornano i percorsi (hook additivo in `renameEntry`); la cancellazione non rimuove il segnalibro, che viene mostrato come mancante (il cestino è recuperabile e un sync può riportare il file). Il file viene riletto quando il watcher segnala una modifica esterna; le scritture proprie sono riconosciute e ignorate.
+**`.memobrain/bookmarks.json`** — `{ "version": 1, "items": [...] }`, forma già diffusa (`file`, `folder`, `search`, `graph`, `group`). `file`: `path` e `subpath` (`#Titolo` oppure `#^id`); `search`: `query`; `graph`: `title` e `options` (oggetto opaco); `group`: `title` e `items` annidati. Campi e tipi sconosciuti sono conservati in scrittura; elementi malformati di tipo noto sono scartati. Gli elementi non hanno id: si indirizzano per percorso di indici. Rename/spostamento aggiornano i percorsi (hook additivo in `renameEntry`); la cancellazione non rimuove il segnalibro, che viene mostrato come mancante (il cestino è recuperabile e un sync può riportare il file). Il file viene riletto quando il watcher segnala una modifica esterna; le scritture proprie sono riconosciute e ignorate.
 
 **`.memobrain/workspaces.json`** — `{ "version": 1, "workspaces": [{ name, savedAt, layout, left, right }] }`, dove `layout` ha la forma di `workspace.json` (`parseLayout`) e `left`/`right` sono `{open, tab, width}`. Il nome è univoco senza distinguere maiuscole; salvare con un nome esistente sovrascrive dopo conferma. Il caricamento fa prima il flush di tutte le note aperte (registro `workspaces/flush.ts`, agganciato a `useNoteDocument`), poi scarta i tab con file inesistenti.
 
@@ -30,7 +30,7 @@ M6-WP3 (seconda metà) aggiunge segnalibri, layout salvati e anteprima al passag
 
 - **Preview solo sui nodi `.cm-wikilink`** — scartata: non funziona in Source e con il link attivo.
 - **Rimuovere i segnalibri dei file cancellati** — scartata: perdita silenziosa in caso di cancellazione esterna o sync parziale.
-- **Id persistiti per elemento** — scartata: si discosta dal formato Obsidian senza benefici.
+- **Id persistiti per elemento** — scartata: si discosta dalla forma diffusa del file senza benefici.
 
 ## Conseguenze
 

@@ -17,7 +17,7 @@ ADR-0026 (M8) ha eliminato la status bar e ha distribuito il contenuto:
 
 Il requisito «Word count» (P0) è soddisfatto dal pannello.
 
-L'analisi dei gap del 2026-10-30 ha però notato un limite: i conteggi dell'editor si vedono solo con la sidebar destra aperta e sulla tab _Statistiche_. Chi scrive con un obiettivo di lunghezza, o lavora con la sidebar chiusa per avere spazio (modalità più comune su schermi piccoli e in presentazione), non ha più un'indicazione a colpo d'occhio. In Obsidian, a cui lo spec si ispira, la status bar mostra i conteggi in basso a destra.
+L'analisi dei gap del 2026-10-30 ha però notato un limite: i conteggi dell'editor si vedono solo con la sidebar destra aperta e sulla tab _Statistiche_. Chi scrive con un obiettivo di lunghezza, o lavora con la sidebar chiusa per avere spazio (modalità più comune su schermi piccoli e in presentazione), non ha più un'indicazione a colpo d'occhio. Negli editor di note a cui lo spec si ispira, la status bar mostra i conteggi in basso a destra.
 
 Gli indicatori di stato (sync, permessi, aggiornamenti, inviti) non hanno questo problema: ADR-0026 li porta nell'header quando la sidebar è chiusa.
 

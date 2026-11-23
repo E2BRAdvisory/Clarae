@@ -4,6 +4,19 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [Unreleased]
+
+Milestone M28 ([roadmap](docs/roadmap.md) §13-unvicies), sessioni M28-S1…S4: il repository non nomina più l'editor di note a cui il prodotto si ispirava, nemmeno in `Specifications.md` e nei documenti storici. Nessuna migrazione, nessun cambiamento dei formati.
+
+### Client desktop e workbench
+
+- I testi del comando e della finestra di conversione dei disegni `.excalidraw.md` sono neutri («Converti un disegno .excalidraw.md»).
+- Nei disegni, un link con lo schema dell'editor di terze parti non è più riconosciuto come URL durante la rinomina dei file collegati.
+
+### Documentazione
+
+- `Specifications.md`, guide, ADR, roadmap e note dei rilasci passati descrivono la compatibilità con formule neutre. Rinominati `docs/adr/0028-excalidraw-fork.md` e `docs/qa/parita-funzionale-m1.md`.
+
 ## [1.8.4] - 2026-11-23
 
 Milestone M27 ([roadmap](docs/roadmap.md) §13-vicies), sessioni M27-S1…S5: **la documentazione diventa un sito** generato da `docs/` e pubblicato su GitHub Pages ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), in stato di proposta). Nessuna modifica al client desktop, al workbench, alla console o al cloud; nessuna migrazione del database.
@@ -974,14 +987,14 @@ Il vault si apre e si modifica anche dalla Web UI del cloud, e il rilascio dei t
 
 Tutto ciò che c'è nella `1.0.0-rc.1` (sotto) più i disegni completi e il nuovo build del client desktop.
 
-### Disegni (parità con i plugin Obsidian Excalidraw ed Excalidraw Extras, ADR-0024)
+### Disegni (parità con i plugin Excalidraw ed Excalidraw Extras di terze parti, ADR-0024)
 
 - **Embed e link**: parti di un disegno (`#frame=`, `#clippedframe=`, `#group=`, `#area=`), allineamento, apertura dei link degli elementi, anteprima al passaggio, link riscritti alla rinomina delle note, immagini, note (come schede) e altri disegni inseribili anche trascinando dal vault.
 - **Esportazione**: PNG/SVG per tutto, selezione o cornice con scala, margine, tema e scena incorporata; salvataggio con nome, PDF, esportazione automatica per vault o per singolo disegno.
 - **Extras**: formule LaTeX (MathJax) e diagrammi Mermaid, offline.
 - **Azioni native** (al posto degli script utente, V-02/D-01): distribuzione, Auto Layout, colore e stile, schemi di colori, forme e Boolean Operations, frecce, testo, mappa mentale, calendari, vignette, linea organica; pannello Strumenti con ricerca, preferiti e recenti.
 - **Presentazione** a diapositive (cornici) con note del relatore, puntatore laser e penne; **Descrivi il disegno come testo** per chi non vede la lavagna.
-- **Import**: `.excalidraw.md` di Obsidian e librerie `.excalidrawlib`.
+- **Import**: `.excalidraw.md` del plugin Excalidraw di terze parti e librerie `.excalidrawlib`.
 - **Amministrazione**: sotto-flag `drawing_latex`, `drawing_mermaid`, `drawing_auto_export` e `drawing_actions` nei profili di configurazione.
 - Accessibilità: l'interfaccia dei disegni (barra, esportazione, pannello Strumenti, presentazione) è nelle scansioni axe; il dialogo di esportazione ora ha il focus e si chiude con Esc.
 
@@ -991,7 +1004,7 @@ Tutto ciò che c'è nella `1.0.0-rc.1` (sotto) più i disegni completi e il nuov
 
 ### Limiti noti (in più rispetto alla rc.1)
 
-- Azioni non implementate rispetto al plugin Obsidian: Icon Library, Image Occlusion, LayerManager, Crop Vintage Mask, Capture Note, Folder Note, "Fixed inner distance"; escluse Collaboration Frame (D-04), Scribble Helper e Hardware Eraser (penna), ExcaliAI e OCR (rete). Elenco completo in `docs/qa/obsidian-parity.md`.
+- Azioni non implementate rispetto al plugin di terze parti: Icon Library, Image Occlusion, LayerManager, Crop Vintage Mask, Capture Note, Folder Note, "Fixed inner distance"; escluse Collaboration Frame (D-04), Scribble Helper e Hardware Eraser (penna), ExcaliAI e OCR (rete). Elenco completo in `docs/qa/parita-funzionale-m1.md`.
 - I buchi delle Boolean Operations lasciano una sottile asola con il tratto; le schede-nota si aggiornano solo su richiesta.
 - Lo stack Docker Compose importa ora un realm di produzione (`deploy/keycloak-prod/`, senza utenti di prova, con il secret di servizio e l'origine della Web UI presi dall'ambiente); il realm di sviluppo (`deploy/keycloak/`) resta solo per `make stack-up` e k3d. Con Helm il Keycloak è esterno e va configurato dall'amministratore.
 - Non cablati (rinviati): applicare un template a ogni nuova nota (ADR-0015) e l'hook `pre-sync-overwrite`.
@@ -1002,7 +1015,7 @@ Candidata al rilascio 1.0: tutte le funzioni P0 e P1 del piano sono implementate
 
 ### Cosa c'è
 
-- **Editor e vault**: note Markdown compatibili con Obsidian (Live Preview, Sorgente, Lettura), link e backlink, properties, tag, ricerca full-text, disegni Excalidraw, canvas, Bases, vista grafo, template, note giornaliere e uniche, composer, segnalibri, workspace, anteprima di pagina, blocchi `query`, esportazione HTML e PDF, importer (Markdown/HTML, Evernote, Notion, Roam, Bear, Google Keep, CSV).
+- **Editor e vault**: note Markdown in file ordinari, apribili anche da altri editor (Live Preview, Sorgente, Lettura), link e backlink, properties, tag, ricerca full-text, disegni Excalidraw, canvas, Bases, vista grafo, template, note giornaliere e uniche, composer, segnalibri, workspace, anteprima di pagina, blocchi `query`, esportazione HTML e PDF, importer (Markdown/HTML, Evernote, Notion, Roam, Bear, Google Keep, CSV).
 - **Sincronizzazione e cloud**: sync con merge sul client, vault cifrati end-to-end (privati) e vault condivisi, condivisione con utenti e gruppi, permessi, profili di configurazione distribuiti, quote, cronologia delle revisioni, recupero file locale.
 - **Amministrazione**: console web (utenti allineati a Keycloak, gruppi, profili con cronologia, limiti, cruscotto storage, audit con CSV), esportazione ZIP (anche dei vault privati, decifrati nel browser), area account con esportazione dei propri dati e cancellazione (GDPR).
 - **Distribuzione**: aggiornamenti firmati (ed25519) con rifiuto di downgrade e replay, installer per macOS, Windows e Linux, chart Helm con HPA, PDB e ingress gRPC, compose per installazioni on-premise.

@@ -38,12 +38,12 @@ Prima di recepire le modifiche servono queste scelte. Senza una scelta esplicita
 - **Intestazione:** «Versione documento: 1.2 — ADR 0009–0035 recepiti (vedi Appendice C)», nuova data. Nome del prodotto senza «(già "Nodus" come nome in codice)».
 - **Appendice C.1, nuove decisioni** (proposta di numerazione):
 
-| ID   | Tema                    | Decisione                                                                                           | Sezioni                |
-| ---- | ----------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
-| D-09 | Workbench web           | La Web UI include un workbench del vault con il core del desktop in WebAssembly (ADR-0029/0030)     | §0.1, §0.3, §2.8, §4.4 |
-| D-10 | Shell desktop           | Header, ribbon, sidebar destra con footer di stato; barra di stato opzionale (ADR-0026/0035)        | §2.2.1, §4.2           |
-| D-11 | Proprietà delle tabelle | Un pacchetto sqlc per modulo, eccezioni dichiarate e verificate (ADR-0033)                          | §1.1, §4.3             |
-| D-12 | Excalidraw              | Fork `@zsviczian/excalidraw`, funzioni dei plugin Obsidian, nessun motore di script (ADR-0024/0028) | §2.7                   |
+| ID   | Tema                    | Decisione                                                                                                 | Sezioni                |
+| ---- | ----------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------- |
+| D-09 | Workbench web           | La Web UI include un workbench del vault con il core del desktop in WebAssembly (ADR-0029/0030)           | §0.1, §0.3, §2.8, §4.4 |
+| D-10 | Shell desktop           | Header, ribbon, sidebar destra con footer di stato; barra di stato opzionale (ADR-0026/0035)              | §2.2.1, §4.2           |
+| D-11 | Proprietà delle tabelle | Un pacchetto sqlc per modulo, eccezioni dichiarate e verificate (ADR-0033)                                | §1.1, §4.3             |
+| D-12 | Excalidraw              | Fork `@zsviczian/excalidraw`, funzioni dei plugin di terze parti, nessun motore di script (ADR-0024/0028) | §2.7                   |
 
 - **Appendice C.2, rischi:**
   - la riga «Web UI anello debole dell'E2EE» va estesa alla scrittura dei vault privati dal workbench, con le mitigazioni di ADR-0029 (CSP dedicata, SRI, blocco per inattività, cancellazione della copia OPFS, flag `web_workbench`);
@@ -92,7 +92,7 @@ Prima di recepire le modifiche servono queste scelte. Senza una scelta esplicita
 | Importer (P1)                | elenco sorgenti                     | Destinazione `Imports/<sorgente>-<data>/` con `Import report.md`; mai sovrascrittura; anteprima identica all'import; tetti per gli zip; HTML convertito in Markdown puro; Google Keep da JSON **e da HTML** (quando manca il JSON)                        | 0017          |
 | Drawing                      | —                                   | Flag `drawings` con sotto-flag `drawing_latex`, `drawing_mermaid`, `drawing_auto_export`, `drawing_actions` (accesi per default)                                                                                                                          | 0024          |
 
-### §2.2.2 Obsidian Flavored Markdown
+### §2.2.2 Markdown esteso (OFM)
 
 - **Footnote `^[inline]`** [nuovo]:
   - indicizzate dai due parser (Go e TS) come `^1`, `^2`, … in ordine di documento, accanto alle etichette `[^x]`; codice inline, escape `\^[` e parentesi non chiuse non contano;
@@ -163,7 +163,7 @@ Prima di recepire le modifiche servono queste scelte. Senza una scelta esplicita
   - import di `.excalidraw.md` e `.excalidrawlib`;
   - il rename riscrive i `[[link]]` dentro i `.excalidraw` (non nei canvas).
 - **§2.7.3** (ADR-0028/0033):
-  - dipendenza `npm:@zsviczian/excalidraw@0.18.145` (fork MIT del plugin Obsidian: lazo, secchiello, disegno per forma), caricata come script della stessa origine;
+  - dipendenza `npm:@zsviczian/excalidraw@0.18.145` (fork MIT del plugin di terze parti: lazo, secchiello, disegno per forma), caricata come script della stessa origine;
   - la versione 0.18.1 di ADR-0010 è superata;
   - gate offline in CI con `web/e2e-security/excalidraw-offline.spec.ts`: disegno con testo CJK, nessuna richiesta esterna;
   - il fallback `esm.sh` dei font è riscritto dalla build verso gli asset dell'app.

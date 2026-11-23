@@ -1,4 +1,4 @@
-# ADR-0024 — Parità funzionale con i plugin Obsidian Excalidraw ed Excalidraw Extras
+# ADR-0024 — Parità funzionale con i plugin Excalidraw ed Excalidraw Extras di terze parti
 
 |                       |                                                                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -14,7 +14,7 @@
 
 ## Contesto
 
-Si portano nell'editor dei disegni le funzioni dei plugin `obsidian-excalidraw-plugin` e `obsidian-excalidraw-extras`, senza cambiare l'architettura (client Wails, Go solo dove serve) e mantenendo i file come `*.excalidraw` con JSON in chiaro (§2.7.1). Il plugin Obsidian ha un motore di script utente (ExcalidrawAutomate) e dipendenze che richiedono rete, eval o accesso privilegiato: in conflitto con V-02/D-01 e con la CSP di ADR-0005.
+Si portano nell'editor dei disegni le funzioni dei plugin Excalidraw ed Excalidraw Extras di terze parti, senza cambiare l'architettura (client Wails, Go solo dove serve) e mantenendo i file come `*.excalidraw` con JSON in chiaro (§2.7.1). Il plugin ha un motore di script utente (ExcalidrawAutomate) e dipendenze che richiedono rete, eval o accesso privilegiato: in conflitto con V-02/D-01 e con la CSP di ADR-0005.
 
 ## Decisione
 
@@ -47,10 +47,10 @@ Si portano nell'editor dei disegni le funzioni dei plugin `obsidian-excalidraw-p
 22. **Frecce legate al ridimensionamento.** `PatchBuilder.setBox` rimette gli estremi legati sul bordo della forma ridimensionata, sulla retta verso l'altro estremo (lo spostamento era già gestito).
 23. **Presentazione a diapositive.** Ogni `frame` è una diapositiva; l'ordine è `customData.memobrain.slide` se presente, altrimenti il nome in ordine "naturale", altrimenti la posizione. Frecce/Pagina/Spazio/Home/Fine navigano, Esc esce; con il puntatore laser come strumento. Senza cornici la presentazione resta quella di prima. Il tasto che avvia il comando (Invio nella palette) non fa avanzare la prima diapositiva.
 24. **Penne e pannello Strumenti.** Penna fine, pennarello, evidenziatore e puntatore laser sono comandi (assegnabili a una scorciatoia); il pannello "Strumenti" elenca tutte le azioni con ricerca, preferiti (`toolFavorites` in `.memobrain/drawing.json`, sincronizzati) e usati di recente (per dispositivo, `localStorage`).
-25. **Import.** `DrawingAPI.ImportLegacy` converte un `.excalidraw.md` di Obsidian (dati `compressed-json` LZ-string o `json`) in un `.excalidraw` in chiaro accanto all'originale, che resta intatto; le immagini di "Embedded Files" sono lette dal vault (anche per solo nome) e inserite come data URL. La decompressione LZ-string è in Go (`internal/drawing/legacy.go`), verificata con un vettore generato da `lz-string` 1.5.0. Le librerie `.excalidrawlib` si importano con `loadLibraryFromBlob` di Excalidraw e si esportano copiando la libreria del vault in `Library.excalidrawlib`.
+25. **Import.** `DrawingAPI.ImportLegacy` converte un `.excalidraw.md` del plugin (dati `compressed-json` LZ-string o `json`) in un `.excalidraw` in chiaro accanto all'originale, che resta intatto; le immagini di "Embedded Files" sono lette dal vault (anche per solo nome) e inserite come data URL. La decompressione LZ-string è in Go (`internal/drawing/legacy.go`), verificata con un vettore generato da `lz-string` 1.5.0. Le librerie `.excalidrawlib` si importano con `loadLibraryFromBlob` di Excalidraw e si esportano copiando la libreria del vault in `Library.excalidrawlib`.
 26. **Sotto-flag del profilo di configurazione.** `drawing_latex`, `drawing_mermaid`, `drawing_auto_export` e `drawing_actions` (in `features.go` e nello schema del profilo) nascondono ciascuno una famiglia di funzioni; non hanno effetto se `drawings` è spento e sono accesi di default.
 27. **Note del relatore e descrizione testuale.** Le note stanno in `customData.memobrain.notes` della cornice e compaiono sotto la diapositiva; «Descrivi il disegno come testo» è un dialogo con contenuto, cornici, testi e link, per l'accessibilità.
-28. **Soglia immagini** 10 MB per file inserito (come la soglia per disegno di §2.7.1); lato Go `drawing.Parse` segnala (`Warnings`, log dell'indicizzatore) le voci di `files` oltre la soglia senza bloccare il salvataggio. **Lingue:** `drawing/lang.ts` mappa la lingua dell'app su quelle di Excalidraw (`languages`), con ripiego `en`. **Formule di `.excalidraw.md`:** `ConvertObsidianMD` marca le immagini con `customData.memobrain` (`kind: latex`) e l'editor le disegna all'apertura con MathJax.
+28. **Soglia immagini** 10 MB per file inserito (come la soglia per disegno di §2.7.1); lato Go `drawing.Parse` segnala (`Warnings`, log dell'indicizzatore) le voci di `files` oltre la soglia senza bloccare il salvataggio. **Lingue:** `drawing/lang.ts` mappa la lingua dell'app su quelle di Excalidraw (`languages`), con ripiego `en`. **Formule di `.excalidraw.md`:** `ConvertLegacyMD` marca le immagini con `customData.memobrain` (`kind: latex`) e l'editor le disegna all'apertura con MathJax.
 29. **Verifica.** Fixture di conformance del merge per cornici/`customData`, immagini aggiunte da entrambi i lati e chiave `memobrain`; test di sync a due dispositivi con elementi extra, esportazioni derivate e `drawing.json`; scansione axe del chrome dei disegni.
 
 ## Alternative considerate

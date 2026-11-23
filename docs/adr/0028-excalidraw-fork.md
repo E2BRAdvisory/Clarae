@@ -1,4 +1,4 @@
-# ADR-0028 — Excalidraw: fork del plugin Obsidian (lazo, secchiello, disegna per la forma)
+# ADR-0028 — Excalidraw: fork con lazo, secchiello e disegna per la forma
 
 |                       |                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------- |
@@ -12,12 +12,12 @@
 
 ## Contesto
 
-Il plugin Excalidraw di Obsidian offre _Disegna per la forma_ (Shift+X), _Secchiello riempimento_ (B) e _Selezione a lazo_. Excalidraw upstream 0.18.1 non li ha (nessun tool `lasso`, `bucketfill`, `autoshape`). Il plugin usa il fork `@zsviczian/excalidraw` (MIT), che li include.
+Il plugin Excalidraw di terze parti, per editor di note Markdown, offre _Disegna per la forma_ (Shift+X), _Secchiello riempimento_ (B) e _Selezione a lazo_. Excalidraw upstream 0.18.1 non li ha (nessun tool `lasso`, `bucketfill`, `autoshape`). Il plugin usa il fork `@zsviczian/excalidraw` (MIT), che li include.
 
 ## Decisione
 
 - `apps/desktop/frontend/package.json`: `"@excalidraw/excalidraw": "npm:@zsviczian/excalidraw@0.18.145"` (alias npm: gli import restano invariati).
-- Il dist/prod del fork non è autocontenuto; l'unica build completa è uno script classico (`dist/obsidian/excalidraw.production.min.js`) che legge `React`, `ReactDOM` e `ReactJSXRuntime` dai globali. `scripts/esbuild.mjs` (plugin `excalidraw-fork`) lo copia in `dist/excalidraw-assets/excalidraw.js`, lo carica con un tag `<script>` (stessa origine, compatibile con `script-src 'self'`, offline) e lo riesporta per nome (`scripts/excalidraw-exports.json`, da rigenerare se cambiano gli export del fork). Il CSS è quello della build `obsidian`.
+- Il dist/prod del fork non è autocontenuto; l'unica build completa è uno script classico (`excalidraw.production.min.js`, in una sottocartella di `dist/` del pacchetto) che legge `React`, `ReactDOM` e `ReactJSXRuntime` dai globali. `scripts/esbuild.mjs` (plugin `excalidraw-fork`) lo copia in `dist/excalidraw-assets/excalidraw.js`, lo carica con un tag `<script>` (stessa origine, compatibile con `script-src 'self'`, offline) e lo riesporta per nome (`scripts/excalidraw-exports.json`, da rigenerare se cambiano gli export del fork). Il CSS è quello della stessa build del fork.
 - `drawing/ExcalidrawIsland.tsx` monta l'editor in una root React propria: il fork non regge il doppio mount di `<StrictMode>` in sviluppo.
 - Adattamenti all'API del fork: `onExcalidrawAPI`, `setViewport` al posto di `scrollToContent`, binding delle frecce `{ elementId, fixedPoint, mode }` (`actions/factory.ts`), tipi mappati in `tsconfig.app.json`.
 - Menu e comandi di Excalidraw al 90% (variabili CSS dei pulsanti/icone in `style.css`); rimosso il pulsante del menu principale.

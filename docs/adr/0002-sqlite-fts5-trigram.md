@@ -9,7 +9,7 @@
 
 ## Contesto
 
-La ricerca deve offrire il matching per sottostringa di Obsidian (≥ 3 caratteri) senza CGO, per compilare il client su tre OS senza toolchain C.
+La ricerca deve offrire il matching per sottostringa degli editor di note (≥ 3 caratteri) senza CGO, per compilare il client su tre OS senza toolchain C.
 
 ## Decisione
 

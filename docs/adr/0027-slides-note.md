@@ -12,7 +12,7 @@
 
 Il mockup della shell (ADR-0026) include nella sidebar destra una tab _ShowSlide_ per configurare la presentazione del documento aperto: slide, effetti, note del presentatore. Lo spec classifica Slides come P2 post-1.0, con la sola indicazione «separatore `---`». Si decide di implementarla in M8, quindi lo spec va allineato.
 
-Vincoli: finestra singola (V-07, niente schermo presentatore su finestra separata), nessun CSS personalizzato e HTML sanificato con DOMPurify (V-02), funzionamento offline, doppio parser con fixture condivise (`shared/conformance/`), file ordinari compatibili con Obsidian.
+Vincoli: finestra singola (V-07, niente schermo presentatore su finestra separata), nessun CSS personalizzato e HTML sanificato con DOMPurify (V-02), funzionamento offline, doppio parser con fixture condivise (`shared/conformance/`), file ordinari, apribili anche da altri editor Markdown.
 
 ## Decisione
 
@@ -29,11 +29,11 @@ Vincoli: finestra singola (V-07, niente schermo presentatore su finestra separat
 ## Alternative considerate
 
 - **reveal.js come dipendenza** — scartata: peso, CSS e temi propri in conflitto con V-02; la pipeline reading esistente basta per un sottoinsieme.
-- **Slide in file `.slides` dedicati** — scartata: rompe la compatibilità con i vault Obsidian e il merge a 3 vie dei `.md`.
+- **Slide in file `.slides` dedicati** — scartata: rompe la compatibilità con i vault di file Markdown ordinari e il merge a 3 vie dei `.md`.
 - **Finestra separata per il presentatore** — scartata: V-07.
 
 ## Conseguenze
 
 - Slides entra in 1.0+ come P1: da riportare nella matrice §2.2.1 e nell'Appendice B, e da coprire in `docs/qa/` (checklist di parità).
-- Il vincolo «Separatore `---`» dello spec è confermato; le note del presentatore e le chiavi `slide-*` sono estensioni di MemoBrain, non compatibili con i plugin Obsidian di slide (che le ignorano senza danno).
+- Il vincolo «Separatore `---`» dello spec è confermato; le note del presentatore e le chiavi `slide-*` sono estensioni di MemoBrain, non compatibili con i plugin di slide di altri editor (che le ignorano senza danno).
 - Un nuovo punto di contatto tra i due parser: ogni modifica alla sintassi richiede aggiornare le fixture in entrambi i linguaggi.

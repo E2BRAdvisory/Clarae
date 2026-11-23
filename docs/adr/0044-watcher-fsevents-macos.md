@@ -17,7 +17,7 @@ Su macOS `fsnotify` usa kqueue, che tiene aperto **un descrittore per ogni file*
 | 10 052 file in 328 cartelle | 10 378 fd, avvio 0,5 s | 11 fd, avvio 5 ms |
 | 50 252 file in 718 cartelle | 50 973 fd, avvio 3,1 s | 11 fd, avvio 5 ms |
 
-Con `kern.maxfilesperproc` (122 880 sulla macchina di misura, meno su altre configurazioni) un vault Obsidian con molti allegati porta il processo a `EMFILE`: falliscono allora tutte le aperture (index.db, sync.db, scritture atomiche, socket). Il rilievo era stato rinviato in M11-W4.
+Con `kern.maxfilesperproc` (122 880 sulla macchina di misura, meno su altre configurazioni) un vault con molti allegati porta il processo a `EMFILE`: falliscono allora tutte le aperture (index.db, sync.db, scritture atomiche, socket). Il rilievo era stato rinviato in M11-W4.
 
 ## Decisione
 

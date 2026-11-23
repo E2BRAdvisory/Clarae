@@ -14,7 +14,7 @@
 
 Il file explorer mostra già ogni file del vault: l'unico filtro è sulle dot-cartelle (`.memobrain`, `.trash`, `.git`), che restano nascoste perché stato interno. Ma un file di tipo sconosciuto (`.zip`, `.docx`, `.pptx`, …) apre una tab con il solo segnaposto «embed-other»: non c'è modo di aprirlo con l'applicazione del sistema operativo, né di scaricarlo dal workbench web.
 
-In parallelo si vogliono presentazioni [Marp](https://marp.app/) (Markdown con direttive, temi e rendering a slide 16:9), create e modificate nell'app con editor e anteprima affiancati ed esportabili. ADR-0027 ha già introdotto le slide di una nota `.md` (pipeline reading, chiavi `slide-*`) e aveva scartato i file di slide dedicati per compatibilità Obsidian e merge a 3 vie. Marp è però un formato diverso (direttive, temi, `paginate`, sfondi `![bg]`) che la pipeline reading non riproduce; tenerlo in un'estensione propria evita che le note `.md` cambino aspetto a seconda del frontmatter e separa nettamente le due funzioni.
+In parallelo si vogliono presentazioni [Marp](https://marp.app/) (Markdown con direttive, temi e rendering a slide 16:9), create e modificate nell'app con editor e anteprima affiancati ed esportabili. ADR-0027 ha già introdotto le slide di una nota `.md` (pipeline reading, chiavi `slide-*`) e aveva scartato i file di slide dedicati per compatibilità con i vault di file ordinari e per il merge a 3 vie. Marp è però un formato diverso (direttive, temi, `paginate`, sfondi `![bg]`) che la pipeline reading non riproduce; tenerlo in un'estensione propria evita che le note `.md` cambino aspetto a seconda del frontmatter e separa nettamente le due funzioni.
 
 Vincoli: nessun CSS personalizzato e HTML sanificato (V-02/D-01), funzionamento offline, CSP con `frame-src 'none'` e senza `unsafe-eval` (desktop e web), finestra singola (V-07), parità desktop/web per costruzione (ADR-0045), budget dei bundle (ADR-0020).
 
@@ -64,7 +64,7 @@ Un unico gestore (`openFile` in `packages/workbench/src/app/openFile.ts`) decide
 
 ## Alternative considerate
 
-- **`.md` con `marp: true` nel frontmatter** (convenzione di Marp, compatibile con Obsidian) — scartata per scelta di prodotto: una nota cambierebbe vista e aspetto a seconda di una chiave, e si sovrapporrebbe alle slide di ADR-0027. Resta un'estensione possibile in futuro.
+- **`.md` con `marp: true` nel frontmatter** (convenzione di Marp) — scartata per scelta di prodotto: una nota cambierebbe vista e aspetto a seconda di una chiave, e si sovrapporrebbe alle slide di ADR-0027. Resta un'estensione possibile in futuro.
 - **`.marp` come file opaco (`other`)** — scartata: niente merge a 3 vie (solo copie di conflitto), niente ricerca né link.
 - **Anteprima in iframe con `srcdoc`** — scartata: `frame-src 'none'` nella CSP di desktop e web.
 - **PPTX rasterizzato in JS (pptxgenjs, una immagine per slide)** — rinviata: dipendenze pesanti e testo non modificabile; da rivalutare se richiesto.
@@ -74,7 +74,7 @@ Un unico gestore (`openFile` in `packages/workbench/src/app/openFile.ts`) decide
 ## Conseguenze
 
 - Spec da aggiornare (owner): §3.4.5 riga «Markdown `.md`» → «Markdown `.md`, `.marp`»; §3.4.6 contenuto sincronizzato con `.marp`; §2.2.1 nuove righe; nota in ADR-0027 che i file `.marp` sono una funzione distinta dalle slide delle note.
-- Vault Obsidian: i `.marp` appaiono in Obsidian solo con l'opzione «Detect all file extensions» e senza anteprima; gli altri strumenti Marp (VS Code, CLI) li leggono rinominandoli `.md`.
+- Altri editor di note: i `.marp` possono non comparire nell'elenco dei file o apparire senza anteprima; gli altri strumenti Marp (VS Code, CLI) li leggono rinominandoli `.md`.
 - La parità è registrata in `shared/parity/features.yaml` con le voci `files.open-by-type` e `presentations.marp`.
 - Nuova dipendenza da tenere aggiornata e dentro i budget dei bundle; i temi di Marp sono la sola eccezione, limitata e sanificata, al divieto di CSS di terzi.
 - Debito accettato: export PPTX assente; da rivedere quando sarà disponibile un renderer senza Chromium o su richiesta esplicita.

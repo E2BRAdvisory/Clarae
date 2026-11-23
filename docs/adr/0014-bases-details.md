@@ -10,7 +10,7 @@
 
 ## Contesto
 
-Le Bases sono file `.base` (YAML) compatibili con Obsidian: filtri, formule e viste (tabella/card) sulle properties indicizzate. Il formato Obsidian non ha una specifica normativa completa: va definito il sottoinsieme che si implementa e come si degrada su ciò che non si capisce, senza mai perdere contenuto dell'utente.
+Le Bases sono file `.base` (YAML) in un formato già diffuso: filtri, formule e viste (tabella/card) sulle properties indicizzate. Questo formato non ha una specifica normativa completa: va definito il sottoinsieme che si implementa e come si degrada su ciò che non si capisce, senza mai perdere contenuto dell'utente.
 
 ## Decisione
 
@@ -25,9 +25,9 @@ Le Bases sono file `.base` (YAML) compatibili con Obsidian: filtri, formule e vi
 ## Alternative considerate
 
 - **Valutatore anche in TS** — scartata: due implementazioni da tenere allineate; con un solo motore Go non servono fixture di conformità.
-- **Libreria di espressioni esterna (CEL, expr)** — scartata: sintassi e semantica diverse da Obsidian, superficie d'attacco maggiore.
+- **Libreria di espressioni esterna (CEL, expr)** — scartata: sintassi e semantica diverse da quelle del formato `.base`, superficie d'attacco maggiore.
 - **Riserializzare l'intero YAML dal modello** — scartata: perde chiavi sconosciute e commenti.
 
 ## Conseguenze
 
-Prestazioni: 10.000 note, filtro + ordinamento ≈ 6,5 ms nel motore e ≈ 86 ms includendo il caricamento da `index.db` (benchmark `BenchmarkRun10kFilterSort`, `BenchmarkLoadAndRun10k`). Il caricamento ricostruisce le note a ogni esecuzione: una cache incrementale è rinviata. Le viste non supportate (mappa, lista) e i formati di colonna avanzati restano per una milestone successiva. Il comportamento fine delle funzioni Obsidian meno comuni può differire: va verificato su vault reali.
+Prestazioni: 10.000 note, filtro + ordinamento ≈ 6,5 ms nel motore e ≈ 86 ms includendo il caricamento da `index.db` (benchmark `BenchmarkRun10kFilterSort`, `BenchmarkLoadAndRun10k`). Il caricamento ricostruisce le note a ogni esecuzione: una cache incrementale è rinviata. Le viste non supportate (mappa, lista) e i formati di colonna avanzati restano per una milestone successiva. Il comportamento fine delle funzioni del formato `.base` meno comuni può differire: va verificato su vault reali.
