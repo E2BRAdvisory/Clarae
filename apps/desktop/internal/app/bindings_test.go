@@ -442,7 +442,7 @@ func TestExportTarget(t *testing.T) {
 	}
 }
 
-// The compressed block is what the Obsidian plugin writes by default (lz-string, base64).
+// The compressed block is what the third-party Excalidraw plugin writes by default (lz-string, base64).
 func TestImportLegacyDrawingCompressedAndImageCap(t *testing.T) {
 	a, info, root := newTestApp(t)
 	d := NewDrawingAPI(a)

@@ -260,7 +260,7 @@ func TestMarkdownFolderWikilinks(t *testing.T) {
 		t.Errorf("attachment not copied: %v", keys(fl))
 	}
 	for name := range fl {
-		if strings.Contains(name, ".obsidian") {
+		if strings.Contains(name, ".editor") {
 			t.Errorf("hidden folder imported: %s", name)
 		}
 	}

@@ -1,6 +1,6 @@
 // Package parser extracts the structure the indexer needs from a Markdown
 // note: frontmatter, headings, links and embeds, tags, block ids, tasks,
-// footnotes and word count (§2.4, §2.2.2 Obsidian Flavored Markdown).
+// footnotes and word count (§2.4, §2.2.2 extended Markdown, OFM).
 //
 // M0 ships a first version driven by the shared conformance fixtures
 // (shared/conformance/markdown): goldmark builds the block structure
@@ -107,7 +107,7 @@ func CutBOM(src []byte) (bom, rest []byte) {
 var md = goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Footnote))
 
 // Parse extracts the structure of a note. title is the file name without
-// extension (Obsidian semantics: the H1 is not the title).
+// extension (the H1 is not the title).
 func Parse(title string, src []byte) Document {
 	doc := Document{Title: title, Aliases: []string{}, Properties: map[string]any{}, Headings: []Heading{}, Links: []Link{}, Tags: []Tag{}, BlockIDs: []BlockID{}, Tasks: []Task{}, Footnotes: []string{}}
 	// A leading BOM is not content: it must not hide a frontmatter block or an ATX heading on the
@@ -554,7 +554,7 @@ func stripInlineCode(s string) string {
 	return b.String()
 }
 
-// isValidTag applies Obsidian's rule: at least one non-numeric character.
+// isValidTag applies the tag rule: at least one non-numeric character.
 func isValidTag(name string) bool {
 	if name == "" {
 		return false

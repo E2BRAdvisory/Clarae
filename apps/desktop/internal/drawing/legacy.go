@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-// Import of the drawings of the Obsidian Excalidraw plugin (".excalidraw.md"): a Markdown note
+// Import of the drawings of the third-party Excalidraw plugin (".excalidraw.md"): a Markdown note
 // whose "## Drawing" section holds the scene as JSON, LZ-string compressed (```compressed-json)
 // or plain (```json). The converter writes the standard Excalidraw JSON (Spec §2.7.1).
 
@@ -32,7 +32,7 @@ const (
 	maxLegacyScene = 2 * maxLegacyJSON // the converted scene, indented (without the inlined images)
 )
 
-// MaxLegacyNoteSize is the largest ".excalidraw.md" note ConvertObsidianMD accepts.
+// MaxLegacyNoteSize is the largest ".excalidraw.md" note ConvertLegacyMD accepts.
 const MaxLegacyNoteSize = maxLegacyNote
 
 // errLegacyTooLarge is returned when a step of the conversion would exceed its bound.
@@ -243,9 +243,9 @@ func ImageMIME(name string) string {
 	return ""
 }
 
-// ConvertObsidianMD turns the text of an ".excalidraw.md" note into standard Excalidraw JSON.
+// ConvertLegacyMD turns the text of an ".excalidraw.md" note into standard Excalidraw JSON.
 // Images of "## Embedded Files" are read with `images` and stored in `files` as data URLs.
-func ConvertObsidianMD(md []byte, images ImageReader) ([]byte, error) {
+func ConvertLegacyMD(md []byte, images ImageReader) ([]byte, error) {
 	if len(md) > maxLegacyNote {
 		return nil, errLegacyTooLarge
 	}

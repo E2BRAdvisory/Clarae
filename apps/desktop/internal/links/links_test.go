@@ -296,7 +296,7 @@ func TestSuggestFilesListsApplicationsAndOtherOpenableFiles(t *testing.T) {
 		"Apps/Other.webapp.bak":       "no",
 		// Hidden: the file explorer does not show them, so the switcher does not offer them.
 		".trash/Road old.md":           "---\naliases: [Zebra]\n---\n# Old\n",
-		".obsidian/Road.canvas":        `{"nodes":[],"edges":[]}`,
+		".editor/Road.canvas":          `{"nodes":[],"edges":[]}`,
 		"Apps/.cache/Road page.webapp": `{"version":1,"url":"https://example.com/"}`,
 	})
 	db := ix.DB()

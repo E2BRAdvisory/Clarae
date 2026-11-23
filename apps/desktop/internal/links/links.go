@@ -1,7 +1,7 @@
 // Package links resolves link targets to vault files and answers the
 // questions built on them: outgoing links, backlinks and unlinked mentions
-// (§2.2.1, §2.5 "links"). Resolution follows Obsidian's "shortest path"
-// behavior and works on the index (index.db), never on the file system.
+// (§2.2.1, §2.5 "links"). Resolution follows the "shortest path"
+// rule and works on the index (index.db), never on the file system.
 package links
 
 import (

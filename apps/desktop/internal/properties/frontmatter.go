@@ -37,12 +37,12 @@ func Set(src []byte, key string, value any) ([]byte, error) {
 	if err := valNode.Encode(value); err != nil {
 		return nil, err
 	}
-	// Dates are written plain (due: 2026-12-01), as Obsidian does, not quoted.
+	// Dates are written plain (due: 2026-12-01), not quoted.
 	if str, ok := value.(string); ok && valNode.Kind == yaml.ScalarNode && (dateRe.MatchString(str) || dateTimeRe.MatchString(str)) {
 		valNode.Tag, valNode.Style = "!!timestamp", 0
 	}
 	if valNode.Kind == yaml.SequenceNode {
-		valNode.Style = yaml.FlowStyle // lists as [a, b], the usual Obsidian style
+		valNode.Style = yaml.FlowStyle // lists as [a, b], the usual style
 	}
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		if mapping.Content[i].Value == key {

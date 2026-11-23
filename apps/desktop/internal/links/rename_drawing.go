@@ -50,7 +50,7 @@ func jsonSafe(text string) bool {
 	return true
 }
 
-var urlString = regexp.MustCompile(`(?i)^(https?|ftp|file|mailto|obsidian):`)
+var urlString = regexp.MustCompile(`(?i)^(https?|ftp|file|mailto):`)
 
 // inURLString reports whether pos lies inside a JSON string that is a URL (the link of an
 // element pointing at the web): "[[x]]" there is part of the address, not a wikilink.

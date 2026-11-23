@@ -94,7 +94,7 @@ func TestPathGuards(t *testing.T) {
 	}
 }
 
-// A name that only starts with ".." is an ordinary vault folder or file (Obsidian users name
+// A name that only starts with ".." is an ordinary vault folder or file (users name
 // folders "..Archive" to sort them first); only the ".." segment leaves the vault.
 func TestDotDotPrefixedNamesAreInside(t *testing.T) {
 	f := newTestFS(t)

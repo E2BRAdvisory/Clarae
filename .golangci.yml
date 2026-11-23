@@ -149,7 +149,7 @@ linters:
         - G122 # walk-callback TOCTOU: only unlinks our own staging files (a symlink is unlinked, never followed)
         - G301 # directory permissions: vault folders are ordinary user folders (0755)
         - G302 # chmod of atomic-write temporaries to 0644: same rationale
-        - G306 # file permissions: notes are ordinary user files (0644), as in Obsidian
+        - G306 # file permissions: notes are ordinary user files (0644)
     revive:
       rules:
         - name: exported

@@ -26,7 +26,7 @@ var textual = map[string]bool{
 }
 
 // ExportZip writes the vault as a ZIP archive: ordinary files with their relative paths and
-// modification times, empty folders included, so unpacking it yields a vault Obsidian opens.
+// modification times, empty folders included, so unpacking it yields a vault of ordinary files that other editors open too.
 // Device-specific and derived data (workspace layout, caches, local databases) and the
 // in-vault trash are left out. The context cancels a long export between files.
 func (f *FS) ExportZip(ctx context.Context, w io.Writer) (ExportStats, error) {

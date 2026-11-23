@@ -68,7 +68,7 @@ func TestLegacyBoundCountsBytes(t *testing.T) {
 	if len(bomb) > 16<<10 {
 		t.Fatalf("the bomb is %d bytes", len(bomb))
 	}
-	_, err := ConvertObsidianMD(note("```compressed-json\n"+bomb+"\n```"), nil)
+	_, err := ConvertLegacyMD(note("```compressed-json\n"+bomb+"\n```"), nil)
 	if err == nil || !strings.Contains(err.Error(), "too large") {
 		t.Fatalf("a scene above the bound in bytes: %v", err)
 	}
@@ -97,11 +97,11 @@ func TestLegacyDeepNestingIsRefused(t *testing.T) {
 	const depth = 5000
 	elements := strings.Repeat("[", depth) + "1" + strings.Repeat("]", depth)
 	scene := `{"type":"excalidraw","elements":[` + elements + `],"appState":{}}`
-	_, err := ConvertObsidianMD(note("```json\n"+scene+"\n```"), nil)
+	_, err := ConvertLegacyMD(note("```json\n"+scene+"\n```"), nil)
 	if !errors.Is(err, errLegacyTooLarge) {
 		t.Fatalf("a %d-byte deeply nested scene: %v", len(scene), err)
 	}
-	if _, err := ConvertObsidianMD([]byte(strings.Repeat("x", maxLegacyNote+1)), nil); !errors.Is(err, errLegacyTooLarge) {
+	if _, err := ConvertLegacyMD([]byte(strings.Repeat("x", maxLegacyNote+1)), nil); !errors.Is(err, errLegacyTooLarge) {
 		t.Fatalf("an oversized note: %v", err)
 	}
 }

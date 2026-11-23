@@ -34,7 +34,7 @@ func note(block string) []byte {
 	return []byte("---\nexcalidraw-plugin: parsed\n---\n# Excalidraw Data\n## Text Elements\nhello ^a1\n\n## Embedded Files\nimg1: [[pics/cat.png]]\nmissing: [[nope.png]]\n\n## Drawing\n" + block + "\n%%\n")
 }
 
-func TestConvertObsidianMD(t *testing.T) {
+func TestConvertLegacyMD(t *testing.T) {
 	images := func(link string) ([]byte, string, bool) {
 		if link == "pics/cat.png" {
 			return []byte{1, 2, 3}, "image/png", true
@@ -46,7 +46,7 @@ func TestConvertObsidianMD(t *testing.T) {
 		"plain":      "```json\n" + legacyPlain + "\n```",
 	} {
 		t.Run(name, func(t *testing.T) {
-			out, err := ConvertObsidianMD(note(block), images)
+			out, err := ConvertLegacyMD(note(block), images)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,21 +79,21 @@ func TestConvertObsidianMD(t *testing.T) {
 	}
 }
 
-func TestConvertObsidianMDErrors(t *testing.T) {
-	if _, err := ConvertObsidianMD([]byte("# just a note"), nil); err == nil {
+func TestConvertLegacyMDErrors(t *testing.T) {
+	if _, err := ConvertLegacyMD([]byte("# just a note"), nil); err == nil {
 		t.Error("a note without a drawing must be rejected")
 	}
-	if _, err := ConvertObsidianMD(note("```json\n{nope\n```"), nil); err == nil {
+	if _, err := ConvertLegacyMD(note("```json\n{nope\n```"), nil); err == nil {
 		t.Error("broken JSON must be rejected")
 	}
 }
 
-func TestConvertObsidianMDFormulas(t *testing.T) {
+func TestConvertLegacyMDFormulas(t *testing.T) {
 	plain := `{"type":"excalidraw","elements":[` +
 		`{"id":"f1","type":"image","fileId":"tex1","customData":{"keep":true},"versionNonce":2147483647},` +
 		`{"id":"f2","type":"image","fileId":"other"}],"appState":{},"files":{}}`
 	md := "## Embedded Files\ntex1: $$\\frac{a}{b}$$\n\n## Drawing\n```json\n" + plain + "\n```\n"
-	out, err := ConvertObsidianMD([]byte(md), nil)
+	out, err := ConvertLegacyMD([]byte(md), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

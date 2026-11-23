@@ -121,7 +121,7 @@ func (d *DrawingAPI) SavePreview(vaultID, hash, variant, svg string) error {
 var exportVariants = map[string]bool{"": true, "light": true, "dark": true}
 
 // exportTarget is where the auto-export of a drawing goes: next to it, named after it, like the
-// Obsidian Excalidraw plugin ("Board.excalidraw.png", "Board.excalidraw.dark.svg"). Computing the
+// third-party Excalidraw plugin ("Board.excalidraw.png", "Board.excalidraw.dark.svg"). Computing the
 // path here keeps the frontend from writing anywhere else.
 func exportTarget(drawingPath, variant, format string) (string, error) {
 	if !strings.EqualFold(path.Ext(drawingPath), ".excalidraw") {
@@ -172,14 +172,14 @@ func (d *DrawingAPI) WriteExport(vaultID, drawingPath, variant, format, dataBase
 	return c.Path, nil
 }
 
-// legacySuffix is the file name ending of the Obsidian Excalidraw plugin's drawings.
+// legacySuffix is the file name ending of the drawings of the third-party Excalidraw plugin.
 const legacySuffix = ".excalidraw.md"
 
 // maxLegacyImages bounds the images inlined into a converted drawing (Spec §2.7.1 warns above 10 MB
 // per drawing, so this is generous but finite).
 const maxLegacyImages = 40 << 20
 
-// ImportLegacy converts an Obsidian ".excalidraw.md" note of the vault into a standard
+// ImportLegacy converts a third-party ".excalidraw.md" note of the vault into a standard
 // ".excalidraw" drawing next to it (plain JSON, Spec §2.7.1) and returns the new path. The note is
 // left untouched; images it embeds are read from the vault and stored in the drawing's files.
 func (d *DrawingAPI) ImportLegacy(vaultID, srcRel string) (string, error) {
@@ -191,7 +191,7 @@ func (d *DrawingAPI) ImportLegacy(vaultID, srcRel string) (string, error) {
 		return "", err
 	}
 	if !strings.HasSuffix(strings.ToLower(srcRel), legacySuffix) {
-		return "", fmt.Errorf("invalid: %q is not an Obsidian Excalidraw note (%s)", srcRel, legacySuffix)
+		return "", fmt.Errorf("invalid: %q is not an Excalidraw Markdown note (%s)", srcRel, legacySuffix)
 	}
 	abs, _, err := ov.FS.Resolve(srcRel)
 	if err != nil {
@@ -230,7 +230,7 @@ func (d *DrawingAPI) ImportLegacy(vaultID, srcRel string) (string, error) {
 		}
 		return nil, "", false
 	}
-	out, err := drawing.ConvertObsidianMD(src.Data, images)
+	out, err := drawing.ConvertLegacyMD(src.Data, images)
 	if err != nil {
 		return "", err
 	}

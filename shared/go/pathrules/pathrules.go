@@ -228,7 +228,7 @@ func Rebase(path, from, to string) (string, bool) {
 	}
 }
 
-// ConfigDir is the per-vault configuration folder (the Obsidian ".obsidian" analogue).
+// ConfigDir is the per-vault configuration folder (hidden, never part of the notes).
 const ConfigDir = ".clarae"
 
 // LegacyConfigDir is the name the folder had up to 1.4.0 (ADR-0052). A vault created by a 1.x client

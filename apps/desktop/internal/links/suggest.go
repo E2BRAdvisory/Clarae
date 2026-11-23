@@ -73,7 +73,7 @@ func SuggestNotes(ctx context.Context, db *sql.DB, query string, limit int) ([]S
 }
 
 // notHidden is the condition of files.path that the file explorer applies: no segment of the path
-// starts with a dot (.trash/, .obsidian/, .clarae/ ...). Such a file can be opened (from the trash,
+// starts with a dot (.trash/, .clarae/, .cache/ ...). Such a file can be opened (from the trash,
 // for one) but is not something to offer by name. In SQL: LIKE has no wildcard in the dot.
 const notHidden = `path NOT LIKE '.%' AND path NOT LIKE '%/.%'`
 
@@ -152,7 +152,7 @@ const (
 // 'md') so SuggestNotes already lists them. An application has no index kind of its own: the
 // index files it as 'other', like any file the application does not know, so it is recognized by
 // its extension and not every 'other' file (a .txt, a .zip) enters the list. Files in a hidden
-// folder (.trash, .obsidian) are left out, as in the file explorer; so are they in SuggestNotes.
+// folder (.trash, .cache) are left out, as in the file explorer; so are they in SuggestNotes.
 func SuggestFiles(ctx context.Context, db *sql.DB, query string, limit int) ([]Suggestion, error) {
 	out, err := suggestFiles(ctx, db, query, true)
 	if err != nil {

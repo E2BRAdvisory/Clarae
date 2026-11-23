@@ -1,4 +1,4 @@
-// Package bases implements Obsidian-compatible ".base" files: the YAML model
+// Package bases implements the ".base" files: the YAML model
 // (filters, formulas, views), a small expression language (hand-rolled parser
 // and evaluator, no eval), the query engine over indexed properties and
 // node-preserving edits of the YAML so that unknown content survives.

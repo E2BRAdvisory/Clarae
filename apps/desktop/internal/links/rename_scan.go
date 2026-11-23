@@ -100,7 +100,7 @@ func escapedQuote(data []byte, pos int) bool {
 var frontmatterLink = regexp.MustCompile(`(!?)\[\[([^\[\]|#"\\\n]+)(#[^\[\]|"\\\n]*)?(\|[^\[\]"\\\n]*)?\]\]`)
 
 // scanFrontmatterLinks finds the wikilinks in the property values of a note
-// ("related: "[[Note]]"", Obsidian's property links) with byte offsets into
+// ("related: "[[Note]]"", the property links) with byte offsets into
 // the whole file. Only the properties the index stores with a "[[" in their
 // value are scanned (the rename candidates are selected that way), never
 // tags, aliases or cssclasses, and never past a YAML comment.

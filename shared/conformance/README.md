@@ -50,9 +50,9 @@ I loader Go stanno in `shared/go/conformance`.
 
 Regole di estrazione condivise:
 
-- `title` è sempre il nome del file senza estensione (come Obsidian); le fixture usano il nome del caso.
+- `title` è sempre il nome del file senza estensione; le fixture usano il nome del caso.
 - Link, tag e block-id dentro code span, code fence, commenti `%%…%%` e URL **non** vengono estratti.
-- I tag seguono le regole Obsidian: `#` seguito da lettere/numeri/`-`/`_`/`/`, almeno un carattere non numerico, terminato da spazio o fine riga.
+- I tag seguono la regola del Markdown esteso: `#` seguito da lettere/numeri/`-`/`_`/`/`, almeno un carattere non numerico, terminato da spazio o fine riga.
 - I link sono elencati in **ordine di apparizione** (riga, poi colonna), wikilink e link Markdown mescolati.
 - Il contenuto dei blocchi di matematica `$$ … $$` non produce link né tag.
 - Il conteggio parole considera i token separati da spazi del corpo (frontmatter escluso) che contengono almeno una lettera o una cifra: la punteggiatura Markdown isolata (`#`, `---`, `*`) non è una parola.

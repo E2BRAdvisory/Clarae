@@ -1,6 +1,6 @@
 // Package templates implements note templates (variable expansion, template
 // listing), daily-note and unique-note naming. Date formats follow the Moment.js
-// token syntax Obsidian uses; only the common subset below is supported:
+// token syntax; only the common subset below is supported:
 //
 //	YYYY YY          year (4 / 2 digits)
 //	Q                quarter

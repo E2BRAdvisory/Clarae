@@ -50,8 +50,8 @@ CREATE TABLE aliases (
 CREATE INDEX aliases_name_ix ON aliases(name);
 
 -- Full-text search over title and body. Its rowid equals files.id, so rows are
--- reached in O(log n); `path` is UNINDEXED and must never be used to look rows up. The trigram tokenizer gives Obsidian
--- style substring matching (3+ characters); case-insensitive.
+-- reached in O(log n); `path` is UNINDEXED and must never be used to look rows up. The trigram tokenizer gives
+-- editor-style substring matching (3+ characters); case-insensitive.
 CREATE VIRTUAL TABLE fts_content USING fts5(
   path UNINDEXED,
   title,

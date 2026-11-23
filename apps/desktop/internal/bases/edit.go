@@ -199,7 +199,7 @@ func render(root *yaml.Node) ([]byte, error) {
 }
 
 // NewBase returns a minimal base with a default table of the notes in folder
-// ("" = the whole vault); only Markdown notes are listed. Obsidian-compatible.
+// ("" = the whole vault); only Markdown notes are listed.
 func NewBase(folder string) []byte {
 	var b strings.Builder
 	folder = strings.Trim(folder, "/")
