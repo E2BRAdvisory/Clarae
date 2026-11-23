@@ -11,9 +11,8 @@ import { importWithRetry } from '../ui/lazyView';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 import { previewAssets } from './assets';
 import { deckSource } from './commands';
-import { SHOW_CSS } from './document';
+import { fitShowSlide, SHOW_CSS } from './document';
 import type { Deck } from './engine';
-import { observeSlides } from './polyfill';
 import { useMarpShow } from './showStore';
 import { deckSettings, deckSlides, displayNote, renumberPages } from './slides';
 
@@ -76,8 +75,9 @@ function Running({ vaultId, path, from }: { vaultId: string; path: string; from:
   const slide = model?.shown[at] ?? 0;
   const loop = model?.settings.loop ?? false;
 
-  // The slides go into a shadow root with the theme (both sanitized by renderDeck).
-  useEffect(() => {
+  // The slides go into a shadow root with the theme (both sanitized by renderDeck); a layout effect,
+  // so that it runs before the one that fits the current slide.
+  useLayoutEffect(() => {
     const el = host.current;
     if (!el || !model) return;
     const shadow = el.shadowRoot ?? el.attachShadow({ mode: 'open' });
@@ -88,12 +88,22 @@ function Running({ vaultId, path, from }: { vaultId: string; path: string; from:
     body.innerHTML = model.deck.html; // sanitized by sanitizeMarpHtml
     renumberPages(body, model.deck.hidden, model.deck.advances); // the slides left out leave no gap in the page numbers
     shadow.replaceChildren(style, body);
-    // Where WebKit leaves the text of a slide in the corner at its natural size, Marp's polyfill fixes it.
-    return observeSlides(el, shadow);
   }, [model]);
-  useEffect(() => {
-    const svgs = host.current?.shadowRoot?.querySelectorAll('div.marpit > svg') ?? [];
+  // The current slide, at its natural size, scaled to the screen by a transform (SHOW_CSS): this
+  // works in WebKit too, where stretching the <svg> would leave the slide in a corner.
+  useLayoutEffect(() => {
+    const el = host.current;
+    const marpit = el?.shadowRoot?.querySelector<HTMLElement>('div.marpit');
+    if (!el || !marpit) return;
+    const svgs = [...marpit.children].filter((c): c is SVGSVGElement => c instanceof SVGSVGElement);
     svgs.forEach((s, i) => s.classList.toggle('current', i === slide));
+    const current = svgs[slide];
+    if (!current) return;
+    const fit = (): void => fitShowSlide(marpit, current, el.clientWidth, el.clientHeight);
+    fit();
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+    resize?.observe(el);
+    return () => resize?.disconnect();
   }, [model, slide]);
 
   // Focus and full screen (where the web view allows it); leaving full screen ends the show.

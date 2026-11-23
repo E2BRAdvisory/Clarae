@@ -8,15 +8,48 @@ div.marpit { margin: 0; padding: 0; }
 div.marpit > svg { display: block; width: 100%; height: auto; }
 `;
 
-/** Layout of the full-screen presentation (inside its shadow root): only the current slide shows. */
+/**
+ * Layout of the full-screen presentation (inside its shadow root): only the current slide shows.
+ * The slide is laid out at its natural size (the viewBox of its `<svg>`, 1280x720 by default) and
+ * `fitShowSlide` scales and centers `div.marpit` with a CSS transform: WebKit (WKWebView, Safari)
+ * does not scale the HTML of a `<foreignObject>` with the viewBox of its `<svg>` (bug 23113), so
+ * an `<svg>` stretched to the screen leaves the slide in a corner at its natural size, while a
+ * transform on an HTML ancestor scales everything in every engine, without Marp's polyfill.
+ */
 export const SHOW_CSS = `
-:host { display: block; width: 100%; height: 100%; }
+:host { display: block; position: relative; width: 100%; height: 100%; overflow: hidden; }
 div.marp-body { width: 100%; height: 100%; }
-div.marpit { width: 100%; height: 100%; }
-/* The slide keeps its proportions (the default preserveAspectRatio is "meet"): centered, with bars on the longer side. */
+div.marpit { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 div.marpit > svg { display: none; width: 100%; height: 100%; }
 div.marpit > svg.current { display: block; }
 `;
+
+/** The natural size of a slide: the viewBox of its `<svg>` (Marp's default 1280x720 without one). */
+export function slideSize(svg: SVGSVGElement): { width: number; height: number } {
+  const box = svg.viewBox?.baseVal;
+  if (box && box.width > 0 && box.height > 0) return { width: box.width, height: box.height };
+  const [, , w, h] = (svg.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
+  return w && h && w > 0 && h > 0 ? { width: w, height: h } : { width: 1280, height: 720 };
+}
+
+/**
+ * Fits the current slide of the presentation to `width` x `height` (the area of the show): as large
+ * as it can be with its proportions, centered, bars on the longer side.
+ */
+export function fitShowSlide(
+  marpit: HTMLElement,
+  svg: SVGSVGElement,
+  width: number,
+  height: number,
+): void {
+  const size = slideSize(svg);
+  const scale = Math.max(0, Math.min(width / size.width, height / size.height));
+  const x = (width - size.width * scale) / 2;
+  const y = (height - size.height * scale) / 2;
+  marpit.style.width = `${size.width}px`;
+  marpit.style.height = `${size.height}px`;
+  marpit.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+}
 
 /** Print layer of "Export to PDF": one slide per page of the slide's size (Marp sets @page). */
 export const PRINT_CSS = `

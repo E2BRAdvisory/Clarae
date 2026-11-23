@@ -15,6 +15,7 @@ for (const { zoom, ...size } of [
   { width: 1600, height: 600, zoom: 1 }, // the other way round: the slide touches top and bottom
   { width: 1000, height: 800, zoom: 1.5 }, // the interface zoom does not apply to the presentation
   { width: 1600, height: 600, zoom: 0.8 },
+  { width: 1920, height: 1080, zoom: 1 }, // a full HD screen: the slide (1280x720) is scaled up
 ]) {
   test(`the current slide fills the screen and is centered at ${size.width}x${size.height}, interface zoom ${zoom * 100}%`, async ({
     page,
@@ -63,6 +64,12 @@ for (const { zoom, ...size } of [
     // The proportions of the slide (16:9) are kept.
     const b = await box();
     expect(Math.abs(b.w / b.h - 16 / 9)).toBeLessThan(0.02);
+    // The fit comes from the transform of div.marpit, not from Marp's polyfill on the section (which
+    // the real WKWebView did not trigger, leaving the slide in a corner at its natural size).
+    expect(await section.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+    expect(
+      await show.locator('div.marpit').evaluate((el) => (el as HTMLElement).style.transform),
+    ).toMatch(/scale\(/);
     expect(Number(await rootZoom())).toBe(1);
     // Ending the show gives the interface its zoom back.
     // (with the button: headless WebKit keeps Escape for its own full screen)
