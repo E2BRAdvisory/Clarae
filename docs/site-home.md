@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Clarae notanda
   text: Documentazione
-  tagline: Knowledge management local-first. Le note sono file ordinari in una cartella, l'app funziona offline e il cloud self-hosted è facoltativo.
+  tagline: Your knowledge, carefully preserved in its clarity.
   actions:
     - theme: brand
       text: Guida utente
