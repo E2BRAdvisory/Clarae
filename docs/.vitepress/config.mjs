@@ -120,7 +120,7 @@ export default defineConfig({
   lang: 'it-IT',
   title: 'Clarae notanda',
   description:
-    'Documentazione di Clarae notanda: knowledge management local-first, desktop e cloud.',
+    'Documentazione di Clarae notanda: Your knowledge, carefully preserved in its clarity.',
   base,
   outDir: '../docs_html',
   cacheDir: './.vitepress/cache',
