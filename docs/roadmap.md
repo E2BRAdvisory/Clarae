@@ -1461,7 +1461,7 @@ Richiesta dell'owner del 2026-11-23, dopo il tag v1.8.3. `docs/` riceve un indic
 
 Richiesta dell'owner del 2026-11-23, dopo il tag v1.8.4: togliere dal repository ogni riferimento all'editor di note a cui il prodotto si ispirava, anche nei documenti storici e in `Specifications.md` (modifica autorizzata esplicitamente dall'owner). La compatibilità resta descritta con formule neutre: «file Markdown ordinari, apribili anche da altri editor», «formato JSON Canvas», «plugin Excalidraw di terze parti», «Markdown esteso (OFM)».
 
-**Stato (2026-11-23): M28-S1…S4 fatte e committate per sessione, non rilasciate. `task ci` verde (571 s) e gli e2e Playwright dei disegni toccati (19 test). Restano solo gli identificatori e i percorsi esportati dal fork di Excalidraw (`packages/workbench/src/drawing/excalidrawHost.ts`, `scripts/excalidraw-exports.json`, `build/esbuild.mjs`), che non si possono rinominare. La storia dei commit non è stata riscritta.**
+**Stato (2026-11-23): M28-S1…S4 fatte e committate per sessione, rilasciate nella versione 1.8.4 insieme a M27 (tag `v1.8.4` ripubblicato, M28-S5). `task ci` verde (571 s) e gli e2e Playwright dei disegni toccati (19 test). Restano solo gli identificatori e i percorsi esportati dal fork di Excalidraw (`packages/workbench/src/drawing/excalidrawHost.ts`, `scripts/excalidraw-exports.json`, `build/esbuild.mjs`), che non si possono rinominare. La storia dei commit non è stata riscritta.**
 
 | Onda  | Sessione | Contenuto                                                                                                                                                                                                                                                                                         | Stato              |
 | ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
@@ -1469,11 +1469,12 @@ Richiesta dell'owner del 2026-11-23, dopo il tag v1.8.4: togliere dal repository
 | **B** | M28-S2   | Workbench e frontend: commenti, test, testi i18n della conversione dei disegni `.excalidraw.md` (solo i valori), spec e2e `drawing-extra-tools.spec.ts`, registro di parità e file generati                                                                                                       | fatta (2026-11-23) |
 | **C** | M28-S3   | `Specifications.md`, README, architettura, indice della documentazione, guide utente, checklist QA (`qa/parita-funzionale-m1.md`), prestazioni e checklist di rilascio                                                                                                                            | fatta (2026-11-23) |
 | **D** | M28-S4   | Documenti storici: ADR (`0028-excalidraw-fork.md`), CHANGELOG dei rilasci passati, roadmap, proposta dello spec 1.2; questa sezione                                                                                                                                                               | fatta (2026-11-23) |
+| **E** | M28-S5   | Note della 1.8.4 con M28, stato di questa sezione, tag `v1.8.4` spostato e ripubblicato                                                                                                                                                                                                           | fatta (2026-11-23) |
 
 **Rischi**
 
 - I nomi dei file rinominati (`docs/adr/0028-excalidraw-fork.md`, `docs/qa/parita-funzionale-m1.md`) cambiano i link esterni a quei documenti.
-- Il tag `v1.8.4`, non ancora pubblicato, punta a un commit precedente a questa milestone.
+- La 1.8.4 era già stata pubblicata senza M28: la GitHub Release è stata eliminata e il tag `v1.8.4` ripubblicato sul commit di M28-S5, così `release.yml` ha ricostruito release, immagine e chart. Chi aveva scaricato la 1.8.4 della prima pubblicazione ha un binario uguale nel comportamento, salvo i due testi e lo schema di link.
 
 ---
 

@@ -4,9 +4,9 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
-## [Unreleased]
+## [1.8.4] - 2026-11-23
 
-Milestone M28 ([roadmap](docs/roadmap.md) §13-unvicies), sessioni M28-S1…S4: il repository non nomina più l'editor di note a cui il prodotto si ispirava, nemmeno in `Specifications.md` e nei documenti storici. Nessuna migrazione, nessun cambiamento dei formati.
+Milestone M27 ([roadmap](docs/roadmap.md) §13-vicies), sessioni M27-S1…S5: **la documentazione diventa un sito** generato da `docs/` e pubblicato su GitHub Pages ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), in stato di proposta). Milestone M28 (§13-unvicies), sessioni M28-S1…S5: **il repository non nomina più l'editor di note a cui il prodotto si ispirava**, nemmeno in `Specifications.md` e nei documenti storici. Nel prodotto cambiano solo i testi della conversione dei disegni `.excalidraw.md` e il riconoscimento di uno schema di link; nessuna migrazione del database, nessun cambiamento dei formati.
 
 ### Client desktop e workbench
 
@@ -15,18 +15,11 @@ Milestone M28 ([roadmap](docs/roadmap.md) §13-unvicies), sessioni M28-S1…S4: 
 
 ### Documentazione
 
-- `Specifications.md`, guide, ADR, roadmap e note dei rilasci passati descrivono la compatibilità con formule neutre. Rinominati `docs/adr/0028-excalidraw-fork.md` e `docs/qa/parita-funzionale-m1.md`.
-
-## [1.8.4] - 2026-11-23
-
-Milestone M27 ([roadmap](docs/roadmap.md) §13-vicies), sessioni M27-S1…S5: **la documentazione diventa un sito** generato da `docs/` e pubblicato su GitHub Pages ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), in stato di proposta). Nessuna modifica al client desktop, al workbench, alla console o al cloud; nessuna migrazione del database.
-
-### Documentazione
-
 - **`docs/index.md`**: introduzione al progetto e indice di tutti i documenti, raggruppati per pubblico (utenti, amministratori, sviluppatori) e per area (ADR, sicurezza, QA, prestazioni, rilascio).
 - **Sito statico con VitePress** (`docs/.vitepress/config.mjs`): `task docs-build` genera `docs_html/` con base `/Clarae/` (`DOCS_BASE` la cambia), ricerca locale e interfaccia in italiano, barra laterale che segue `docs/index.md` e tutti gli ADR. I `README.md` diventano l'indice della loro cartella; i link a file fuori dal sito (`Specifications.md`, sorgenti, `api/`) puntano al file su GitHub. `task docs-dev` e `task docs-preview` per l'anteprima.
 - **Pubblicazione sul branch `gh-pages`**: `task docs-publish` (`DOCS_DRY_RUN=1` per non pushare) e il workflow `.github/workflows/docs.yml`, che costruisce e pubblica a ogni push su `main` che tocca `docs/`. Il workflow non esegue controlli: `task ci` resta il cancello (ADR-0036).
 - ADR-0067, sezione M27 della roadmap, sezione «Sito della documentazione» in `docs/dev-setup.md`, README e processo di rilascio aggiornati. Le righe da aggiornare in `Specifications.md` (§6, Appendice C) sono nelle «Conseguenze» dell'ADR, a cura dell'owner.
+- `Specifications.md` (modifica autorizzata dall'owner), guide, ADR, roadmap e note dei rilasci passati descrivono la compatibilità con formule neutre. Rinominati `docs/adr/0028-excalidraw-fork.md` e `docs/qa/parita-funzionale-m1.md`.
 
 ### Contratti
 
@@ -36,7 +29,8 @@ Milestone M27 ([roadmap](docs/roadmap.md) §13-vicies), sessioni M27-S1…S5: **
 
 - `task ci` verde sull'albero della 1.8.4 (745 s): lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
 - `task docs-build` senza link interrotti (340 link interni del sito controllati); `scripts/docs-publish.sh` provato contro un remote locale: prima pubblicazione, sito invariato (nessun commit), sito modificato, dry run.
-- **Non eseguiti** `task e2e` e `task test-integration`: nessuna modifica al prodotto.
+- Con M28: `task ci` di nuovo verde (571 s) e i 19 test Playwright dei disegni toccati (`drawing-wp6`, `drawing-extra-tools`, `drawing-embed`) sul mock.
+- **Non eseguiti** il `task e2e` completo e `task test-integration`: le sole modifiche al prodotto sono due testi e la regex degli schemi URL dei disegni, coperta da `TestInURLStringSchemes`.
 
 ### Non provato e lavoro successivo
 
