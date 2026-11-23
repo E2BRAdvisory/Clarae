@@ -4,6 +4,32 @@ Le note di rilascio di ogni versione sono la sezione `## [X.Y.Z]` di questo file
 
 Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da prima della 1.2.0 il task runner è [Task](https://taskfile.dev) (ADR-0032) e gli stessi target si eseguono con `task <target>`, per esempio `task e2e`, `task e2e-desktop-prod`, `task test-integration`, `task test-wasm`, `task stack-up`.
 
+## [1.8.4] - 2026-11-23
+
+Milestone M27 ([roadmap](docs/roadmap.md) §13-vicies), sessioni M27-S1…S5: **la documentazione diventa un sito** generato da `docs/` e pubblicato su GitHub Pages ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), in stato di proposta). Nessuna modifica al client desktop, al workbench, alla console o al cloud; nessuna migrazione del database.
+
+### Documentazione
+
+- **`docs/index.md`**: introduzione al progetto e indice di tutti i documenti, raggruppati per pubblico (utenti, amministratori, sviluppatori) e per area (ADR, sicurezza, QA, prestazioni, rilascio).
+- **Sito statico con VitePress** (`docs/.vitepress/config.mjs`): `task docs-build` genera `docs_html/` con base `/Clarae/` (`DOCS_BASE` la cambia), ricerca locale e interfaccia in italiano, barra laterale che segue `docs/index.md` e tutti gli ADR. I `README.md` diventano l'indice della loro cartella; i link a file fuori dal sito (`Specifications.md`, sorgenti, `api/`) puntano al file su GitHub. `task docs-dev` e `task docs-preview` per l'anteprima.
+- **Pubblicazione sul branch `gh-pages`**: `task docs-publish` (`DOCS_DRY_RUN=1` per non pushare) e il workflow `.github/workflows/docs.yml`, che costruisce e pubblica a ogni push su `main` che tocca `docs/`. Il workflow non esegue controlli: `task ci` resta il cancello (ADR-0036).
+- ADR-0067, sezione M27 della roadmap, sezione «Sito della documentazione» in `docs/dev-setup.md`, README e processo di rilascio aggiornati. Le righe da aggiornare in `Specifications.md` (§6, Appendice C) sono nelle «Conseguenze» dell'ADR, a cura dell'owner.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 1.8.4 (stub rigenerati); nessuna operazione nuova.
+
+### Verificato
+
+- `task ci` verde sull'albero della 1.8.4 (745 s): lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
+- `task docs-build` senza link interrotti (340 link interni del sito controllati); `scripts/docs-publish.sh` provato contro un remote locale: prima pubblicazione, sito invariato (nessun commit), sito modificato, dry run.
+- **Non eseguiti** `task e2e` e `task test-integration`: nessuna modifica al prodotto.
+
+### Non provato e lavoro successivo
+
+- Il workflow `docs.yml` non è ancora stato eseguito su GitHub; serve abilitare Pages (_Settings_ → _Pages_ → _Deploy from a branch_ → `gh-pages`, `/ (root)`).
+- M26-S4 e M26-S5 (interfaccia «File non inviati», guide, revisione) restano da fare.
+
 ## [1.8.3] - 2026-11-21
 
 Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S1…S3: **le cartelle dei sistemi di versione non si sincronizzano più**, e il core sa elencare **i file che non invia, con il motivo** ([ADR-0066](docs/adr/0066-vcs-esclusi-e-file-non-inviati.md), accettato dall'owner il 2026-11-21, non ancora recepito in `Specifications.md`). Il blocco «File non inviati» in Impostazioni › Sincronizzazione arriva con M26-S4: in questa versione l'elenco esiste nel core e nei binding, non nell'interfaccia. Nessuna migrazione del database.

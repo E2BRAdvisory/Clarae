@@ -1436,6 +1436,27 @@ Richiesta dell'owner del 2026-11-21, dopo il tag v1.8.2. Clarae esclude **sempre
 - **Quota:** le copie VCS già nel cloud restano conteggiate finché non le toglie qualcuno.
 - **Codici in `last_error`:** le righe scritte dalle versioni precedenti hanno testo libero; `classifyLastError` deve riconoscerle (test con i messaggi storici).
 
+## 13-vicies. M27 — Sito della documentazione su GitHub Pages
+
+Richiesta dell'owner del 2026-11-23, dopo il tag v1.8.3. `docs/` riceve un indice (`docs/index.md`) e diventa un sito statico in `docs_html/`, pubblicato sul branch `gh-pages` per GitHub Pages da un task locale e da un workflow su ogni push su `main`. Decisione: [ADR-0067](adr/0067-sito-documentazione-github-pages.md) (proposta; eccezione ad ADR-0036, che voleva `release.yml` come unico workflow).
+
+**Stato (2026-11-23): M27-S1…S4 fatte e committate per sessione, rilasciate come versione 1.8.4 (tag `v1.8.4`, M27-S5). Nessuna modifica al prodotto. `task ci` verde (745 s). Restano all'owner: l'accettazione di ADR-0067, l'aggiornamento di `Specifications.md` (§6 e Appendice C) e l'attivazione di Pages sul branch `gh-pages`; il workflow `docs.yml` non è ancora stato eseguito su GitHub.**
+
+| Onda  | Sessione | Contenuto                                                                                                                                                                                                                                                           | Stato                                                                                                              |
+| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **0** | M27-S1   | ADR-0067 e riga nell'indice degli ADR                                                                                                                                                                                                                               | fatta (2026-11-23), ADR in stato _proposta_                                                                        |
+| **A** | M27-S2   | `docs/index.md`: introduzione al progetto e indice di tutti i documenti di `docs/` per pubblico                                                                                                                                                                     | fatta (2026-11-23); link e copertura verificati (90 link, 70 documenti)                                            |
+| **B** | M27-S3   | VitePress 1.6 (`docs/.vitepress/config.mjs`): barra laterale da `index.md`, `README.md` come indice di cartella, link fuori dal sito verso GitHub, codice inline protetto da Vue, `.nojekyll`; `task docs-build`, `docs-dev`, `docs-preview`; `docs_html/` ignorata | fatta (2026-11-23); 340 link interni del sito verificati; corretto un `<vault>` nella roadmap che rompeva il build |
+| **C** | M27-S4   | `scripts/docs-publish.sh` (commit con indice temporaneo sopra `gh-pages`, fast-forward, nessun commit se il sito non cambia), `task docs-publish`, workflow `.github/workflows/docs.yml`, guide di sviluppo e di rilascio                                           | fatta (2026-11-23); script provato contro un remote locale (prima pubblicazione, invariata, modificata, dry run)   |
+| **D** | M27-S5   | Versione 1.8.4: contratto, stub, esempio Compose, perimetro del pentest, CHANGELOG e questa sezione                                                                                                                                                                 | fatta (2026-11-23)                                                                                                 |
+
+**Criteri di uscita:** `task docs-build` senza link interrotti; `task docs-publish DOCS_DRY_RUN=1` prepara il commit; il workflow `docs.yml` pubblica `gh-pages` al primo push su `main` che tocca `docs/`, e il sito risponde su `https://<owner>.github.io/Clarae/`.
+
+**Rischi**
+
+- **Pagine come template Vue:** un tag HTML non chiuso nel testo di un documento rompe il build del sito; va provato con `task docs-build` quando si scrivono documenti.
+- **Repository privato:** GitHub Pages richiede un piano a pagamento.
+
 ---
 
 ## 14. Trasversale: test e verifica
