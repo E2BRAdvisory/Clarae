@@ -6,6 +6,25 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-11-23
+
+Milestone M30 ([roadmap](docs/roadmap.md) §13-tervicies), sessioni M30-S1…S2: **la presentazione di un `.marp` riempie davvero lo schermo anche nell'app desktop su macOS**. La 1.8.5 aveva tolto l'effetto dello zoom dell'interfaccia, ma nella WKWebView reale la slide restava alla sua dimensione naturale (1280×720) nell'angolo in alto a sinistra. Nessuna migrazione del database, nessun cambiamento dei formati né del protocollo.
+
+### Client desktop e workbench
+
+- **Presentazione Marp a tutto schermo in WebKit**: WebKit non scala l'HTML di un `<foreignObject>` con il `viewBox` del suo `<svg>` (bug 23113), e il polyfill di Marp, applicato solo quando le misure del layout mostravano il difetto, nella WKWebView dell'app non scattava. Ora la slide si dispone alla sua dimensione naturale (il `viewBox`, 1280×720 di norma) e `div.marpit` viene scalato e centrato con una trasformazione CSS (`fitShowSlide` in `marp/document.ts`), che vale in ogni motore senza polyfill e segue il ridimensionamento dello schermo. `e2e/marp-show-layout.spec.ts` prova anche 1920×1080 e controlla che l'adattamento venga dalla trasformazione e non dal polyfill.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 1.8.6 (stub rigenerati); nessuna operazione nuova.
+
+### Verificato
+
+- `task ci` verde sull'albero della 1.8.6 (551 s): lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
+- `e2e/marp-show-layout.spec.ts` e `e2e/marp.spec.ts` sul mock, su Chromium e WebKit (`E2E_WEBKIT=1`): tutti verdi.
+- **Non eseguiti** il `task e2e` completo, `task test-integration` e la prova manuale nell'app desktop: WebKit headless di Playwright non riproduceva il difetto della WKWebView, quindi la correzione va confermata a mano nell'app.
+- Le miniature del pannello Slideshow usano ancora il polyfill (`fitSlides`): se nell'app compaiono fuori posto, si correggono allo stesso modo.
+
 ## [1.8.5] - 2026-11-23
 
 Milestone M29 ([roadmap](docs/roadmap.md) §13-duovicies), sessioni M29-S1…S2: **le presentazioni si mostrano sempre al 100%**, qualunque sia lo zoom dell'interfaccia. Con la 1.8.5 esce anche la riduzione del sito della documentazione alle guide e ai documenti di sicurezza, committata dopo la 1.8.4. Nessuna migrazione del database, nessun cambiamento dei formati né del protocollo.

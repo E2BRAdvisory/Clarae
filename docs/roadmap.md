@@ -1492,6 +1492,22 @@ Richiesta dell'owner del 2026-11-23: in presentazione le slide Marp non erano a 
 - Le miniature del pannello Slideshow restano sotto lo zoom dell'interfaccia: in WebKit, con uno zoom diverso dal 100%, il polyfill potrebbe scalarle male. Fuori dall'ambito della richiesta.
 - La prova nell'app desktop reale (WKWebView, schermo intero di sistema) non è stata fatta: gli e2e girano su Chromium e WebKit headless.
 
+## 13-tervicies. M30 — Presentazione Marp a tutto schermo nella WKWebView
+
+Segnalazione dell'owner del 2026-11-23, con screenshot, dopo la 1.8.5: nell'app desktop su macOS la slide della presentazione Marp resta a 1280×720 nell'angolo in alto a sinistra di uno schermo 1920×1080. La correzione di M29 (lo zoom dell'interfaccia) era giusta ma non era la causa: WebKit non scala il `<foreignObject>` con il `viewBox` dell'`<svg>` (bug 23113) e il polyfill di Marp, applicato da `observeSlides` solo quando le misure mostravano il difetto, nella WKWebView reale non scattava; WebKit headless di Playwright non lo riproduce. Nessuna deviazione dallo spec né ADR (ADR-0048 §4 invariato).
+
+**Stato (2026-11-23): M30-S1 e S2 fatte e committate per sessione, rilasciate nella versione 1.8.6. `task ci` verde (551 s). Resta la conferma manuale nell'app desktop.**
+
+| Onda  | Sessione | Contenuto                                                                                                                                                                                                                                                                                                        | Stato                                                   |
+| ----- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **A** | M30-S1   | `MarpShow` dispone la slide corrente alla sua dimensione naturale e scala `div.marpit` con una trasformazione CSS (`fitShowSlide`, `slideSize` in `marp/document.ts`, `ResizeObserver`), senza il polyfill; `marp-show-layout.spec.ts` con 1920×1080 e il controllo che l'adattamento venga dalla trasformazione | fatta (2026-11-23); e2e Marp verdi su Chromium e WebKit |
+| **B** | M30-S2   | Versione 1.8.6: contratto, stub, esempio Compose, perimetro del pentest, CHANGELOG e questa sezione                                                                                                                                                                                                              | fatta (2026-11-23)                                      |
+
+**Rischi**
+
+- La prova nella WKWebView reale non è automatizzabile qui: va fatta a mano (`task run-desktop`, presentazione di un `.marp` a schermo intero).
+- Le miniature del pannello Slideshow (`fitSlides`) dipendono ancora dal polyfill e potrebbero avere lo stesso difetto nell'app.
+
 ---
 
 ## 14. Trasversale: test e verifica
