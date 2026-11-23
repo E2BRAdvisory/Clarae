@@ -1476,6 +1476,22 @@ Richiesta dell'owner del 2026-11-23, dopo il tag v1.8.4: togliere dal repository
 - I nomi dei file rinominati (`docs/adr/0028-excalidraw-fork.md`, `docs/qa/parita-funzionale-m1.md`) cambiano i link esterni a quei documenti.
 - La 1.8.4 era già stata pubblicata senza M28: la GitHub Release è stata eliminata e il tag `v1.8.4` ripubblicato sul commit di M28-S5, così `release.yml` ha ricostruito release, immagine e chart. Chi aveva scaricato la 1.8.4 della prima pubblicazione ha un binario uguale nel comportamento, salvo i due testi e lo schema di link.
 
+## 13-duovicies. M29 — Presentazioni al 100%
+
+Richiesta dell'owner del 2026-11-23: in presentazione le slide Marp non erano a tutto schermo al 100%. Causa: lo zoom dell'interfaccia (Aspetto → Zoom), applicato come `zoom` CSS sulla radice da `applyAppearance`, valeva anche per le presentazioni, e in WebKit il polyfill di Marp, che non lo conosce, scalava male la slide. Nessuna deviazione dallo spec né ADR: il comportamento resta quello di ADR-0048 §4.
+
+**Stato (2026-11-23): M29-S1 e S2 fatte e committate per sessione, rilasciate nella versione 1.8.5. `task ci` verde (550 s).**
+
+| Onda  | Sessione | Contenuto                                                                                                                                                                                                                                                                              | Stato                                                                           |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **A** | M29-S1   | `util/fullscreen.ts` mette `data-presenting` sulla radice per tutta la presentazione (Marp, slideshow delle note, disegni, canvas a tutto schermo); `style.css` la porta a `zoom: 1 !important`; test vitest dell'helper, `marp-show-layout.spec.ts` con zoom 150% e 80%, guida utente | fatta (2026-11-23); e2e verdi su Chromium e WebKit, e rossi senza la regola CSS |
+| **B** | M29-S2   | Versione 1.8.5: contratto, stub, esempio Compose, perimetro del pentest, CHANGELOG e questa sezione                                                                                                                                                                                    | fatta (2026-11-23)                                                              |
+
+**Rischi**
+
+- Le miniature del pannello Slideshow restano sotto lo zoom dell'interfaccia: in WebKit, con uno zoom diverso dal 100%, il polyfill potrebbe scalarle male. Fuori dall'ambito della richiesta.
+- La prova nell'app desktop reale (WKWebView, schermo intero di sistema) non è stata fatta: gli e2e girano su Chromium e WebKit headless.
+
 ---
 
 ## 14. Trasversale: test e verifica

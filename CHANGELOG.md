@@ -6,9 +6,27 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-11-23
+
+Milestone M29 ([roadmap](docs/roadmap.md) §13-duovicies), sessioni M29-S1…S2: **le presentazioni si mostrano sempre al 100%**, qualunque sia lo zoom dell'interfaccia. Con la 1.8.5 esce anche la riduzione del sito della documentazione alle guide e ai documenti di sicurezza, committata dopo la 1.8.4. Nessuna migrazione del database, nessun cambiamento dei formati né del protocollo.
+
+### Client desktop e workbench
+
+- **Le presentazioni si mostrano al 100%**: la presentazione di un `.marp`, lo slideshow di una nota, la presentazione di un disegno e il canvas a tutto schermo ignorano lo zoom dell'interfaccia (Aspetto → Zoom) finché sono aperti, e all'uscita lo zoom torna com'era. Con uno zoom diverso dal 100% la slide Marp non risultava più a tutto schermo e in WebKit (WKWebView su macOS) il polyfill di Marp la scalava in modo sbagliato. L'attributo `data-presenting` sulla radice, messo da `util/fullscreen.ts`, attiva in `style.css` `zoom: 1 !important`; `e2e/marp-show-layout.spec.ts` lo verifica con zoom 150% e 80% su Chromium e WebKit.
+
 ### Documentazione
 
 - **Il sito della documentazione pubblica solo `docs/user-guide`, `docs/admin-guide` e `docs/security`** ([ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md), emendato), con una home dedicata (`docs/site-home.md`); `docs/index.md` resta l'indice del repository. Le altre voci di `docs/` sono escluse dal build (`srcExclude`), i link verso di esse puntano al file su GitHub, la barra laterale e la navigazione non hanno più ADR, roadmap e architettura, e il workflow `docs.yml` parte solo quando cambiano le pagine pubblicate, la configurazione del sito o `docs/index.md`.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 1.8.5 (stub rigenerati); nessuna operazione nuova.
+
+### Verificato
+
+- `task ci` verde sull'albero della 1.8.5 (550 s): lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
+- `e2e/marp-show-layout.spec.ts` sul mock, su Chromium e WebKit (`E2E_WEBKIT=1`): 8 test verdi; senza la regola CSS le quattro varianti con zoom 150% e 80% falliscono.
+- **Non eseguiti** il `task e2e` completo, `task test-integration` e la prova manuale nell'app desktop (WKWebView reale): la modifica è una regola CSS e due righe di `util/fullscreen.ts`.
 
 ## [1.8.4] - 2026-11-23
 
