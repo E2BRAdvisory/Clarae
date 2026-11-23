@@ -37,5 +37,5 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Vault **condiviso** (Web UI → I miei vault → "Scarica ZIP"): lo ZIP contiene gli stessi file del vault locale (confronto con `diff -r`, escluso `.memobrain/` device-specific).
 - [ ] Vault condiviso oltre 512 MB (o `DirectLimit` ridotto in dev): la UI passa al job, mostra "in coda/in corso/pronto" e scarica; dopo 24 h il link non funziona più.
 - [ ] Vault **privato**: dialogo passphrase → ZIP decifrato nel browser identico al vault locale; passphrase errata → errore chiaro; con recovery key funziona; nessuna richiesta all'API contiene la passphrase o file in chiaro (pannello Rete del browser).
-- [ ] Desktop: comando "Esporta vault come ZIP" (palette): dialogo "Salva con nome", messaggio con numero di file; lo ZIP si apre in Obsidian come vault; la destinazione dentro il vault è rifiutata; annullando il dialogo non succede nulla.
+- [ ] Desktop: comando "Esporta vault come ZIP" (palette): dialogo "Salva con nome", messaggio con numero di file; lo ZIP, estratto, si apre come vault; la destinazione dentro il vault è rifiutata; annullando il dialogo non succede nulla.
 - [ ] Un vault privato non si esporta dal server: `GET /vaults/{id}/export.zip` risponde `409 VAULT_ENCRYPTED`.

@@ -13,7 +13,7 @@ L'app desktop è distribuita per macOS, Windows e Linux. Le modalità di distrib
 ## Primo avvio
 
 1. Avviate l'app: compare la schermata **Apri un vault**.
-2. Scegliete una cartella esistente (anche un vault di Obsidian) oppure una cartella vuota: diventerà il vostro vault.
+2. Scegliete una cartella esistente (anche una cartella di note creata con un altro editor) oppure una cartella vuota: diventerà il vostro vault.
 3. Il cloud non serve per iniziare: tutto funziona offline.
 
 ## Dove l'app salva i dati

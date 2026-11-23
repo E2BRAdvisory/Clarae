@@ -1,6 +1,6 @@
 # Presentazioni
 
-Ci sono due modi di presentare. Ogni nota Markdown può diventare una presentazione, senza un formato a parte: la nota resta un normale file `.md` leggibile anche da Obsidian (le prime tre sezioni). Per slide curate nell'aspetto esistono poi i file `.marp`, presentazioni Marp con editor, scheda Slideshow, presentazione a tutto schermo ed export in HTML, PDF e PowerPoint (sezione [Presentazioni Marp](#presentazioni-marp-marp)).
+Ci sono due modi di presentare. Ogni nota Markdown può diventare una presentazione, senza un formato a parte: la nota resta un normale file `.md` leggibile anche da altri editor (le prime tre sezioni). Per slide curate nell'aspetto esistono poi i file `.marp`, presentazioni Marp con editor, scheda Slideshow, presentazione a tutto schermo ed export in HTML, PDF e PowerPoint (sezione [Presentazioni Marp](#presentazioni-marp-marp)).
 
 ## Dividere in slide
 

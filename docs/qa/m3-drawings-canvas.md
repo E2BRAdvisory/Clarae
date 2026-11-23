@@ -48,7 +48,7 @@ Da eseguire sul webview reale (gli e2e usano Chromium con i binding simulati).
 - [ ] Esportazione automatica (anche l'override per singolo disegno): `Disegno.excalidraw.png/.svg` accanto al file 15 secondi dopo l'ultimo salvataggio e subito alla chiusura del disegno (dalla 1.6, non a ogni salvataggio).
 - [ ] LaTeX (inserisci, doppio clic per modificare, reimposta dimensione) e Mermaid (testo → diagramma) senza richieste di rete.
 - [ ] Trascina dal file explorer sul canvas: immagine, nota (scheda) e altro disegno nel punto di rilascio.
-- [ ] Copia un `.excalidraw.md` di Obsidian (con un'immagine incorporata) nel vault → "Converti…": nasce `.excalidraw` accanto, apribile e con l'immagine; l'originale è intatto.
+- [ ] Copia un `.excalidraw.md` dei plugin Excalidraw di terze parti (con un'immagine incorporata) nel vault → "Converti…": nasce `.excalidraw` accanto, apribile e con l'immagine; l'originale è intatto.
 - [ ] Importa un `.excalidrawlib` copiato nel vault: le forme compaiono nella libreria; "Esporta la libreria" crea `Library.excalidrawlib`.
 - [ ] Embed con `|left`, `|right-wrap` e `#frame=Nome`: allineamento e porzione corretti in Live Preview e Lettura.
 - [ ] Inserire un'immagine oltre 10 MB è rifiutato con un messaggio chiaro; la ricerca trova il nome di una cornice.
@@ -72,7 +72,7 @@ Da eseguire sul webview reale (gli e2e usano Chromium con i binding simulati).
 - [ ] Trascina da una maniglia di una scheda su un'altra: nasce il collegamento; doppio clic sul collegamento per l'etichetta.
 - [ ] Colori preset 1–6 su nodi e collegamenti; Annulla/Ripristina (⌘/Ctrl+Z, ⌘/Ctrl+Shift+Z); Elimina.
 - [ ] Zoom con pizzico/⌘+rotella, pan con trascinamento o rotella; "Adatta al contenuto".
-- [ ] Un `.canvas` creato in Obsidian si apre e, riscritto da MemoBrain Notes, si riapre in Obsidian senza perdite.
+- [ ] Un `.canvas` in formato JSON Canvas creato da un altro editor si apre e, riscritto da MemoBrain Notes, si riapre in quell'editor senza perdite.
 - [ ] `![[mappa.canvas]]` in una nota: immagine statica; doppio clic apre la lavagna.
 
 ## Due dispositivi

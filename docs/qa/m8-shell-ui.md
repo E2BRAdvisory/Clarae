@@ -53,7 +53,7 @@ Segnare `[x]` con data e sistema operativo.
 - [ ] Le transizioni sono disattivate con «riduci movimento» attivo nel sistema; il tema chiaro/scuro/automatico delle slide è corretto con entrambi i temi dell'app.
 - [ ] Con la rete scollegata la presentazione funziona uguale (nessuna richiesta esterna).
 - [ ] Su un vault condiviso in sola lettura: si può presentare, le opzioni sono disabilitate.
-- [ ] Un vault Obsidian con plugin di slide: le note con `---` si aprono normalmente in Obsidian e le chiavi `slide-*` e `Note:` non rompono nulla.
+- [ ] Un vault creato con altri editor e con plugin di slide: le note con `---` si aprono normalmente in quegli editor e le chiavi `slide-*` e `Note:` non rompono nulla.
 
 ## Barra di stato (ADR-0035)
 

@@ -2,7 +2,7 @@
   <img src="assets/readme-banner.png" alt="Clarae notanda — Your knowledge, carefully preserved in its clarity." width="100%" />
 </p>
 
-**Clarae notanda** è un'app di knowledge management _local-first_. Le note sono file Markdown ordinari in una cartella (il _vault_), compatibile con i vault di Obsidian: l'app funziona completamente offline e il cloud è facoltativo.
+**Clarae notanda** è un'app di knowledge management _local-first_. Le note sono file Markdown ordinari in una cartella (il _vault_), apribile anche da altri editor: l'app funziona completamente offline e il cloud è facoltativo.
 
 - **Client desktop** (macOS, Windows, Linux) basato su Wails: editor Markdown con modalità Live (WYSIWYG, Milkdown), Sorgente (CodeMirror) e Lettura, link e backlink, grafo, ricerca full-text, canvas (`.canvas`), disegni Excalidraw (`.excalidraw`), Bases (`.base`),
   template, note giornaliere, presentazioni e cronologia delle versioni.

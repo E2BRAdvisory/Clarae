@@ -1,6 +1,6 @@
 # Documentazione di Clarae notanda
 
-**Clarae notanda** è un'app di knowledge management _local-first_. Le note sono file ordinari (`.md`, `.canvas`, `.base`, `.excalidraw`) in una cartella, il _vault_, compatibile con i vault di Obsidian: l'app funziona completamente offline e il cloud è facoltativo.
+**Clarae notanda** è un'app di knowledge management _local-first_. Le note sono file ordinari (`.md`, `.canvas`, `.base`, `.excalidraw`) in una cartella, il _vault_, apribile anche da altri editor: l'app funziona completamente offline e il cloud è facoltativo.
 
 - **Client desktop** (macOS, Windows, Linux) su Wails v3, Go e React/TypeScript: editor Markdown, link e backlink, grafo, ricerca full-text, lavagne, disegni Excalidraw, basi, presentazioni, applicazioni web e terminale integrato.
 - **Cloud Service** self-hosted in Go (PostgreSQL, storage S3-compatibile, autenticazione Keycloak/OIDC) per sincronizzare i vault tra dispositivi e condividerli con utenti e gruppi. Il merge avviene sempre sul client: il server ordina le modifiche e archivia i contenuti senza interpretarli.
@@ -102,7 +102,7 @@ Accessibilità:
 Checklist e runbook di verifica per milestone:
 
 - [M0 — «Hello vault» con login](qa/m0-checklist.md)
-- [M1 — Parità con Obsidian](qa/obsidian-parity.md)
+- [M1 — Parità funzionale](qa/parita-funzionale-m1.md)
 - [M3 — Disegni e canvas](qa/m3-drawings-canvas.md)
 - [M4 — Condivisione, gruppi e configurazione](qa/m4-sharing.md)
 - [M5 — Console admin ed export](qa/m5-admin-export.md)

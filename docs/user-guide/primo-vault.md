@@ -4,7 +4,7 @@ Un **vault** è una cartella sul vostro computer che contiene le note. Potete av
 
 ## Aprire un vault
 
-_Apri cartella come vault_ nella schermata iniziale; i vault recenti sono elencati sotto. Si possono aprire anche vault creati con Obsidian: le note, gli allegati e i file `.canvas` restano com'erano.
+_Apri cartella come vault_ nella schermata iniziale; i vault recenti sono elencati sotto. Si possono aprire anche cartelle di note create con altri editor: le note, gli allegati e i file `.canvas` restano com'erano.
 
 ## L'interfaccia
 

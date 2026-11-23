@@ -83,7 +83,7 @@ W8 è stato confrontato con l'albero precedente a 10.000 note in una sequenza A/
 
 ## Limiti noti
 
-- Nessuna misura sulla webview reale (WebKit/WebView2): avvio a freddo end-to-end, digitazione e rendering vanno confermati a mano (checklist `docs/qa/obsidian-parity.md`).
+- Nessuna misura sulla webview reale (WebKit/WebView2): avvio a freddo end-to-end, digitazione e rendering vanno confermati a mano (checklist `docs/qa/parita-funzionale-m1.md`).
 - Regex su tutto il vault > 200 ms (prefiltro sui letterali non implementato).
 - La cache di ricerca ha un costo in RAM pari al testo del vault (budget 512 MB, poi streaming).
 - `index.db` ≈ 5,3× il testo; riconciliazione a vault invariato 3,5 s a 50k (in background).

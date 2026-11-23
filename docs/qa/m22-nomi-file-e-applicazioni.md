@@ -18,7 +18,7 @@ Prove a mano per ciò che le suite automatiche non vedono: l'esploratore su un v
 ## 0. Preparazione
 
 - Un build del client del 2026-11-19 o successivo (la sezione _Unreleased_ del [CHANGELOG](../../CHANGELOG.md)): `task run-desktop` per macOS con il vault demo, oppure il pacchetto per Windows o Linux.
-- Per i nomi (sezione 1): un vault con file di tutti i tipi. Il vault dell'owner, con `Desktop_UI`, `SlideClarae` e `SATAP`, va bene; altrimenti creare a mano nella stessa cartella `Piano.md`, `Piano.canvas`, `Schema.excalidraw`, `Review.marp`, `Sito.webapp`, `Tabella.base`, `foto.png`, `manuale.pdf`, `documento.docx`, `LICENSE`, `.gitignore`, `Lettere/` (una cartella) e `Vecchio.excalidraw.md` (un disegno nel formato del plugin Obsidian).
+- Per i nomi (sezione 1): un vault con file di tutti i tipi. Il vault dell'owner, con `Desktop_UI`, `SlideClarae` e `SATAP`, va bene; altrimenti creare a mano nella stessa cartella `Piano.md`, `Piano.canvas`, `Schema.excalidraw`, `Review.marp`, `Sito.webapp`, `Tabella.base`, `foto.png`, `manuale.pdf`, `documento.docx`, `LICENSE`, `.gitignore`, `Lettere/` (una cartella) e `Vecchio.excalidraw.md` (un disegno nel formato dei plugin Excalidraw di terze parti).
 - Per le applicazioni (sezione 2): la matrice [`m18-webview-matrice.md`](m18-webview-matrice.md), sezioni 2 (Windows) e 3 (Linux), con la preparazione che descrive.
 
 ## 1. Nomi dei file senza estensione (macOS, Windows, Linux, workbench web)
