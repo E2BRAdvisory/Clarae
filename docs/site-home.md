@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Clarae notanda
-  text: Documentazione
-  tagline: Your knowledge, carefully preserved in its clarity.
+  text: Your knowledge, carefully preserved in its clarity.
+  tagline: Con Clarae notanda hai la potenza di un’app di knowledge management moderna e la semplicità di una cartella locale. Nessun formato proprietario, nessun abbonamento obbligato, lavora offline ovunque e scegli tu se usare il cloud.
   actions:
     - theme: brand
       text: Guida utente
