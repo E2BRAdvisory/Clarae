@@ -1,0 +1,50 @@
+name: Docs
+
+# Builds the documentation site (VitePress, docs/ → docs_html/) and publishes it on the gh-pages branch, which GitHub
+# Pages serves (Settings → Pages → Deploy from a branch → gh-pages, / (root)). ADR-0067: an exception to ADR-0036 that
+# publishes and checks nothing else; task ci stays the gate before a merge. Locally the same is `task docs-publish`.
+#
+# Supply chain: actions pinned to a full commit SHA, as in release.yml (refreshing the pins: deploy/PINS.md).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'assets/brand/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'scripts/docs-publish.sh'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One publication at a time, none cancelled: each one is a fast-forward of gh-pages on top of the previous one.
+concurrency:
+  group: docs-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish the site
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # setup-node replaces the Node on PATH, so corepack is enabled after it.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn docs:build
+      - name: Publish docs_html on gh-pages
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: bash scripts/docs-publish.sh

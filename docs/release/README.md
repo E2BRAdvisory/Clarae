@@ -1,6 +1,6 @@
 # Processo di rilascio
 
-Dettagli tecnici e scelte: ADR-0023 e ADR-0031; verifiche: ADR-0036. L'unico workflow GitHub è `release.yml`: costruisce e pubblica, **non firma nulla** e non esegue lint né test. Non c'è un servizio di CI: le verifiche si fanno in locale con `task ci` prima del tag.
+Dettagli tecnici e scelte: ADR-0023 e ADR-0031; verifiche: ADR-0036. Il workflow di rilascio è `release.yml` (l'altro, `docs.yml`, pubblica solo il sito della documentazione: ADR-0067): costruisce e pubblica, **non firma nulla** e non esegue lint né test. Non c'è un servizio di CI: le verifiche si fanno in locale con `task ci` prima del tag.
 
 ## Versioni
 

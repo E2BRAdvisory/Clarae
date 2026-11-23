@@ -517,6 +517,13 @@ tasks:
     cmds:
       - yarn vitepress preview docs --port 5176
 
+  # The same publication runs in .github/workflows/docs.yml on every push to main that touches docs/ (ADR-0067).
+  docs-publish:
+    desc: Build the documentation site and publish docs_html/ on the gh-pages branch (DOCS_REMOTE, DOCS_BRANCH; DOCS_DRY_RUN=1 does not push)
+    cmds:
+      - task: docs-build
+      - DOCS_REMOTE={{.DOCS_REMOTE | default "origin"}} DOCS_BRANCH={{.DOCS_BRANCH | default "gh-pages"}} DOCS_DRY_RUN={{.DOCS_DRY_RUN | default "0"}} bash scripts/docs-publish.sh
+
   build-cloud:
     desc: 'Build the cloud binary into bin/ (embeds whatever is in web-embed/dist: run web-build first)'
     dir: '{{.CLOUD}}'

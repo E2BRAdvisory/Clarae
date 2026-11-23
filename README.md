@@ -112,8 +112,8 @@ tag di rilascio. Oltre a lint e test comprende typecheck, govulncheck, test del 
 (`task test-wasm`), i pannelli cloud sul core WebAssembly contro un cloud finto validato sull'OpenAPI
 (`task test-core`), controllo di parità desktop/web e del codice generato. Le suite lente (integrazione,
 sync a due dispositivi e contract test, e2e Playwright, client misti, cloud vero) sono elencate in [docs/dev-setup.md](docs/dev-setup.md#verifiche) e si eseguono quando si
-tocca l'area relativa e prima di un rilascio. L'unico workflow GitHub, `release.yml`, parte da un tag e
-costruisce e pubblica immagine, chart e installer senza eseguire controlli.
+tocca l'area relativa e prima di un rilascio. Il workflow GitHub `release.yml` parte da un tag e
+costruisce e pubblica immagine, chart e installer senza eseguire controlli; `docs.yml` pubblica il sito della documentazione su GitHub Pages (ADR-0067).
 
 Altri dettagli (script di debug, test singoli, WebAssembly, parità) in [docs/dev-setup.md](docs/dev-setup.md);
 piano di sviluppo in [docs/roadmap.md](docs/roadmap.md).
