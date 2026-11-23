@@ -96,7 +96,7 @@ export type FeatureId =
   | 'drawing.export' // Esportazione di un disegno (PNG, SVG, PDF dal ribbon) ed esportazione automatica
   | 'drawing.slideshow' // Presentazione di un disegno
   | 'drawing.library' // Libreria di forme Excalidraw
-  | 'drawing.legacy' // Conversione dei disegni Obsidian (.excalidraw.md)
+  | 'drawing.legacy' // Conversione dei disegni .excalidraw.md
   | 'export.zip' // Download del vault come ZIP
   | 'export.note' // Esportazione di una nota (PDF, immagine, HTML)
   | 'import' // Importazione da altre applicazioni

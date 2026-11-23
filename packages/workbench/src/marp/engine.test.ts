@@ -79,7 +79,7 @@ describe('Marp rendering', () => {
     expect(doc.body.textContent).toContain('<script>alert(1)</script>'); // shown as text, inert
   });
 
-  it('turns Obsidian embeds of pictures into Marp images', () => {
+  it('turns OFM embeds of pictures into Marp images', () => {
     expect(embedsToImages('![[a b.png]] ![[c.png|200]] ![[d.png|20x30]]')).toBe(
       '![](<a b.png>) ![w:200](<c.png>) ![w:20 h:30](<d.png>)',
     );

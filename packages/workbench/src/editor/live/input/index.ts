@@ -2,7 +2,7 @@
 // answers. Installed by the real editor only (crepe.ts), after the views; the headless editor of the
 // fidelity tests has no use for it. The pieces:
 //
-//   rules.ts      the Obsidian syntax typed as text becomes the node or mark the file has
+//   rules.ts      the OFM syntax typed as text becomes the node or mark the file has
 //   refs.ts       footnote and link references, typed or pasted, become the atom of their source
 //   bulk.ts       a text that comes whole is put in character by character, through the same rules
 //   autopair.ts   brackets and quotes typed in pairs (the `autoPair` setting)

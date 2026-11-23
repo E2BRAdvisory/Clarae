@@ -93,7 +93,7 @@ export function openTarget(path: string): 'in-app' | 'external' {
   return IN_APP.has(classify(name)) ? 'in-app' : 'external';
 }
 
-/** The Obsidian Excalidraw plugin's drawings, stored as notes: `Name.excalidraw.md`. */
+/** The legacy drawings of the third-party Excalidraw plugin, stored as notes: `Name.excalidraw.md`. */
 const LEGACY_DRAWING = /\.excalidraw\.md$/i;
 
 /**
@@ -101,7 +101,7 @@ const LEGACY_DRAWING = /\.excalidraw\.md$/i;
  * The extension is hidden only for the files that open in a tab of the application
  * (`openTarget(name) === 'in-app'`: notes, drawings, canvases, bases, applications, images, PDFs,
  * audio, video); a file opened outside it (.docx, .zip, LICENSE, .gitignore) keeps its whole name.
- * `ext` keeps the case of the file and includes the dot; the Obsidian drawing `X.excalidraw.md`
+ * `ext` keeps the case of the file and includes the dot; the legacy drawing `X.excalidraw.md`
  * splits as `X` and `.excalidraw.md`. Folders do not go through here.
  */
 export function splitName(name: string): { stem: string; ext: string } {
@@ -147,7 +147,7 @@ const ALIGNS: readonly string[] = ['left', 'right', 'center', 'left-wrap', 'righ
 
 /**
  * Size and alignment of an embed alias: "300", "300x200", "300|left", "right-wrap". The
- * alignment keywords are the ones of the Obsidian Excalidraw plugin (`left`, `right`, `center`,
+ * alignment keywords are the ones of the third-party Excalidraw plugin (`left`, `right`, `center`,
  * and the `-wrap` forms that let the text flow around the picture).
  */
 export function embedOptions(alias: string): {

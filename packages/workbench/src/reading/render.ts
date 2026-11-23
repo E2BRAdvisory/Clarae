@@ -1,4 +1,4 @@
-// Reading view: Markdown -> sanitized HTML (remark/rehype + Obsidian syntax).
+// Reading view: Markdown -> sanitized HTML (remark/rehype + OFM syntax).
 //
 // Pipeline: strip frontmatter -> blank %%comments%% -> remark (GFM, math) ->
 // OFM plugin (wikilinks, embeds, ==highlight==, #tags, callouts, tasks) ->
@@ -73,7 +73,7 @@ function node(
   return { type: 'emphasis', children, data: { hName, hProperties: props } } as PhrasingContent;
 }
 
-/** Splits a text node into text + Obsidian inline nodes. */
+/** Splits a text node into text + OFM inline nodes. */
 function transformText(value: string): PhrasingContent[] {
   const out: PhrasingContent[] = [];
   let last = 0;

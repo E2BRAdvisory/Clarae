@@ -10,7 +10,7 @@
 // whatever this one lets go (what the editor itself copied: the clipboard of a copy in the editor carries
 // `data-pm-slice`, and its nodes would not survive a trip through HTML and Markdown; code of an editor
 // of code). Plain text does not go through that plugin: it makes the DOM of the text and parses it
-// again, and the nodes of Obsidian's syntax (`[[x]]`, `$$`, `%%`, footnotes) do not survive.
+// again, and the nodes of the OFM syntax (`[[x]]`, `$$`, `%%`, footnotes) do not survive.
 //
 // An embed does not go in when the paste happens: the files are written first. The place it will take is
 // a position that follows the edits made meanwhile (as in Source), so the embed lands where the paste or
@@ -203,7 +203,7 @@ function barsInWikilinks(content: Fragment, schema: Schema): Fragment {
  * parse goes straight into the document, so `[[x]]`, `![[x]]`, `$$…$$`, `%%…%%` and footnote definitions
  * stay what they were written as, and so do the references to a footnote or to a link definition of the
  * note (refs.ts). The clipboard plugin of Milkdown would take it through the DOM, where the nodes of
- * Obsidian's syntax are lost. A line of text keeps the blanks at its edges (but not at the start of a
+ * the OFM syntax are lost. A line of text keeps the blanks at its edges (but not at the start of a
  * line, where Markdown has none), and a line that reads as a block's start goes in as text in the middle of a block. A table cell and a heading take it in one line (a line end would break the table, or make the
  * heading a setext one). False when it came to nothing.
  */
@@ -220,7 +220,7 @@ function pastePlainText(view: EditorView, parse: (md: string) => PMNode, text: s
   try {
     doc = parse(core);
     // a line that starts like a block, after text of a block (in the middle or at its end): no block (it would split it)
-    // (at the end of it, a block of Obsidian's syntax, a footnote definition say, is still the block it is)
+    // (at the end of it, a block of the OFM syntax, a footnote definition say, is still the block it is)
     const atEnd = view.state.selection.to === $from.end();
     if (oneLine && $from.parent.isTextblock && $from.parentOffset > 0) {
       const own = atEnd && doc.firstChild?.type.name === 'raw_block';

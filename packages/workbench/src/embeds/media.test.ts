@@ -137,7 +137,7 @@ describe('file names without the extension', () => {
     expect(splitName('clip.webm')).toEqual({ stem: 'clip', ext: '.webm' });
   });
 
-  it('cuts only the last extension, and the Obsidian drawing in notes as one', () => {
+  it('cuts only the last extension, and the legacy drawing in notes as one', () => {
     expect(splitName('a.b.canvas')).toEqual({ stem: 'a.b', ext: '.canvas' });
     expect(splitName('v1.2 notes.md')).toEqual({ stem: 'v1.2 notes', ext: '.md' });
     expect(splitName('Old.excalidraw.md')).toEqual({ stem: 'Old', ext: '.excalidraw.md' });

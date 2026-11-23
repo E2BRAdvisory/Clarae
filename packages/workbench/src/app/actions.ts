@@ -250,7 +250,7 @@ export async function followLink(
   return true;
 }
 
-/** A link to a note that does not exist yet creates it on click (like Obsidian). */
+/** A link to a note that does not exist yet creates it on click (as is customary). */
 export async function openOrCreate(
   from: string,
   spec: { target: string; heading: string; block: string },

@@ -1,4 +1,4 @@
-// The inline Obsidian-flavoured rules in ONE place: `scanInline` finds every OFM construct of a
+// The inline rules of the extended Markdown (OFM) in ONE place: `scanInline` finds every OFM construct of a
 // source line (wikilinks, embeds, links, tags, ^block ids, ==highlights==, $math$, footnotes,
 // %%comments%%, tasks) as typed spans, with the SAME rules as the Go indexer (apps/desktop/
 // internal/parser; shared fixtures in shared/conformance/markdown). The indexer (extract.ts) is
@@ -13,7 +13,7 @@ export function isExternal(target: string): boolean {
   return /^[A-Za-z][A-Za-z0-9+.-]+:/.test(target);
 }
 
-/** Obsidian rule: a tag needs at least one character that is not a digit, '/', '-' or '_'. */
+/** OFM rule: a tag needs at least one character that is not a digit, '/', '-' or '_'. */
 export function isValidTag(name: string): boolean {
   if (name === '') return false;
   for (const ch of name) {

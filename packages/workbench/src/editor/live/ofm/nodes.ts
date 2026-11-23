@@ -1,5 +1,5 @@
 // The ProseMirror side of the Markdown layer (A-D3, A-D4): what has no schema of its own, and the
-// Obsidian constructs.
+// OFM constructs.
 //
 //   raw_block, raw_inline   atoms that hold the SOURCE text of whatever the editor cannot project
 //                           (comments, link definitions, HTML, setext headings, indented code,

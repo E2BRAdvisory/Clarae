@@ -1,4 +1,4 @@
-// What the user types that the file reads as Obsidian syntax (A-W5b): `[[Note]]`, `![[embed]]`, `#tag`,
+// What the user types that the file reads as OFM syntax (A-W5b): `[[Note]]`, `![[embed]]`, `#tag`,
 // `==highlight==`, `%%comment%%`, a trailing `^id` and `[text](url)` become the node or mark the file
 // would give them. Without that the text stays plain text, and the serializer escapes plain text that
 // looks like a construct (`\[[x]]`, `\#tag`: the escape invariant of the layer), so a note typed in Live

@@ -1,4 +1,4 @@
-// Source mode: the raw Markdown with syntax highlighting and Obsidian syntax
+// Source mode: the raw Markdown with syntax highlighting and OFM syntax
 // marked (nothing is hidden or replaced).
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 import {

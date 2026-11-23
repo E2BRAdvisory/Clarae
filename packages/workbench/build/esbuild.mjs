@@ -56,7 +56,7 @@ export const urlImports = {
 };
 
 /**
- * Excalidraw is the zsviczian fork (the one behind the Obsidian plugin: lasso, bucket fill,
+ * Excalidraw is the zsviczian fork (the one behind the third-party plugin: lasso, bucket fill,
  * draw-to-shape). Its only self-contained build is a classic script that reads React, ReactDOM and
  * ReactJSXRuntime from globals and sets ExcalidrawLib. The virtual module below hands it the app's
  * React, loads the script copied into dist/excalidraw-assets (same origin: script-src 'self') and

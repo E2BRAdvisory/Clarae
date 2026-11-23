@@ -1,4 +1,4 @@
-// Shape libraries and drawings of the Obsidian Excalidraw plugin, as commands: import and export a
+// Shape libraries and drawings of the third-party Excalidraw plugin, as commands: import and export a
 // ".excalidrawlib", convert an ".excalidraw.md" into a drawing. All files are vault files; the
 // native Go side only converts (ImportLegacy), the library itself is read and written here.
 import i18next from 'i18next';
@@ -88,7 +88,7 @@ export function exportLibrary(): Promise<void> {
   });
 }
 
-/** "Convert an .excalidraw.md": the Obsidian plugin's drawing becomes a standard drawing next to it. */
+/** "Convert an .excalidraw.md": the plugin's legacy drawing becomes a standard drawing next to it. */
 export function importLegacyDrawing(): Promise<void> {
   return guard(async () => {
     const vault = useAppStore.getState().vault;

@@ -274,7 +274,7 @@ const (
 	// DrawingLibrary: Libreria di forme Excalidraw
 	DrawingLibrary FeatureID = "drawing.library"
 
-	// DrawingLegacy: Conversione dei disegni Obsidian (.excalidraw.md)
+	// DrawingLegacy: Conversione dei disegni .excalidraw.md
 	DrawingLegacy FeatureID = "drawing.legacy"
 
 	// ExportZip: Download del vault come ZIP

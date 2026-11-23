@@ -85,7 +85,7 @@ export interface Deck {
   release(): void;
 }
 
-/** Obsidian embeds of pictures (`![[a.png]]`, `![[a.png|200]]`) as Marp images. */
+/** OFM embeds of pictures (`![[a.png]]`, `![[a.png|200]]`) as Marp images. */
 export function embedsToImages(source: string): string {
   return source.replace(
     /!\[\[([^\]|#\n]+)(?:\|(\d+)(?:x(\d+))?)?\]\]/g,

@@ -41,7 +41,7 @@ describe('canvas model', () => {
     expect(data['extra']).toEqual({ keep: true });
     expect(data.nodes[0]?.['mine']).toBe(7);
     expect(JSON.parse(serializeCanvas(data))).toEqual(JSON.parse(text));
-    expect(serializeCanvas(data)).toContain('\n\t'); // tab indented like Obsidian
+    expect(serializeCanvas(data)).toContain('\n\t'); // tab indented, as JSON Canvas files usually are
   });
 
   it('accepts an empty file and refuses broken ones', () => {

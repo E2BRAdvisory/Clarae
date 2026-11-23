@@ -1,6 +1,6 @@
 // Embedding a part of a drawing: `![[Board.excalidraw#frame=Intro]]`, `#clippedframe=Intro`,
 // `#group=<id>`, `#area=<element id>`. The fragment may also be written as a block reference
-// (`#^frame=Intro`), the form the Obsidian Excalidraw plugin uses.
+// (`#^frame=Intro`), the form the third-party Excalidraw plugin uses.
 
 export type DrawingRefKind = 'frame' | 'clippedframe' | 'group' | 'area';
 

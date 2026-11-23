@@ -415,7 +415,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   useEffect(() => {
     canEdit.current = !locked && !present && !viewing;
   }, [locked, present, viewing]);
-  // Formulas imported from Obsidian (.excalidraw.md) carry their TeX but no rendered image: draw
+  // Formulas imported from a legacy .excalidraw.md carry their TeX but no rendered image: draw
   // them once the drawing is open. The same heals a formula whose file went missing.
   const healedFormulas = useRef('');
   useEffect(() => {

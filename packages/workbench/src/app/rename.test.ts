@@ -30,7 +30,7 @@ describe('renameTarget', () => {
     expect(renameTarget('Plan.md', false, '.md')).toBe('.md.md');
   });
 
-  it('keeps the whole extension of an Obsidian drawing stored as a note', () => {
+  it('keeps the whole extension of a legacy drawing stored as a note', () => {
     expect(renameTarget('Old.excalidraw.md', false, 'New')).toBe('New.excalidraw.md');
     expect(renameTarget('Old.excalidraw.md', false, 'New.excalidraw.md')).toBe('New.excalidraw.md');
   });

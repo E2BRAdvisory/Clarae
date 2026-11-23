@@ -1906,10 +1906,10 @@ features:
         - packages/workbench/src/drawing/actions/actions.test.ts
         - packages/workbench/src/drawing/actions/more.test.ts
         - apps/desktop/frontend/e2e/drawing-actions.spec.ts
-        - apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts
+        - apps/desktop/frontend/e2e/drawing-extra-tools.spec.ts
       workbench:
         - apps/desktop/frontend/e2e/drawing-actions.spec.ts
-        - apps/desktop/frontend/e2e/drawing-obsidian-tools.spec.ts
+        - apps/desktop/frontend/e2e/drawing-extra-tools.spec.ts
 
   - id: drawing.navigation
     title: Navigazione di un disegno (zoom sulla selezione, mini-mappa)
@@ -2021,7 +2021,7 @@ features:
         - apps/desktop/frontend/e2e/drawing-wp6.spec.ts
 
   - id: drawing.legacy
-    title: Conversione dei disegni Obsidian (.excalidraw.md)
+    title: Conversione dei disegni .excalidraw.md
     desktop:
       status: yes
       commands: [drawing:import-legacy]

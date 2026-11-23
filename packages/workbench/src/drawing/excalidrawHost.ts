@@ -1,11 +1,10 @@
-// The host of the Excalidraw fork (zsviczian, the one behind the Obsidian plugin; ADR-0028).
+// The host of the Excalidraw fork (zsviczian; ADR-0028).
 //
-// The fork expects the application that embeds it to register a host (`configureObsidianExcalidrawHost`):
-// its text editor asks it for an inline link suggester the moment a text is edited, and throws "Obsidian
-// Excalidraw host is not configured" without one. The editor then stays half open (the text hidden, no
+// The fork expects the application that embeds it to register a host:
+// its text editor asks it for an inline link suggester the moment a text is edited, and throws without one. The editor then stays half open (the text hidden, no
 // field to type in) and, since a text is "being edited", nothing can be dragged either. The other
 // capabilities fall back to defaults when there is no host: this adapter gives exactly those, so that the
-// canvas behaves as the stock Excalidraw does, and it has no suggester, no Obsidian command and no shared
+// canvas behaves as the stock Excalidraw does, and it has no suggester, no host command and no shared
 // Mermaid instance of its own (Clarae converts diagrams itself: drawing/mermaid).
 //
 // `protocolVersion` is typed with the fork's own constant: a fork that changes the protocol stops this file

@@ -1,4 +1,4 @@
-// Scene actions (the native counterpart of the Obsidian Excalidraw script library). Every action
+// Scene actions (the native counterpart of the script library of the third-party Excalidraw plugin). Every action
 // is a pure function from the current selection to a patch, so it is testable without Excalidraw
 // and the merge by element id (shared/go/merge/jsonid.go) keeps working: a patch never touches
 // anything but `elements`.

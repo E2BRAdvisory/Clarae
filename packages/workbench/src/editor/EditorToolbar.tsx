@@ -1,5 +1,5 @@
 // The editing toolbar above a note: formatting, headings, lists, blocks and inserts in one row,
-// like the "Editing Toolbar" plugin for Obsidian. It acts on the editor of its pane through its handle.
+// like an editing-toolbar plugin. It acts on the editor of its pane through its handle.
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../app/api';

@@ -1,4 +1,4 @@
-// The Obsidian constructs and the raw nodes of the Markdown layer, one construct at a time: how the
+// The OFM constructs and the raw nodes of the Markdown layer, one construct at a time: how the
 // file is read into the document (nodes, marks, raw), and that the file is what comes back.
 import { extract } from '@clarae/markdown';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,7 +19,7 @@ function read(raw: string): { doc: string; again: string } {
   return { doc: s.doc.toString(), again: s.text(s.doc, { forceDirty: true }) };
 }
 
-describe('Obsidian constructs are nodes and marks', () => {
+describe('OFM constructs are nodes and marks', () => {
   it('wikilinks and embeds keep their raw text inside, an escaped one is text', () => {
     const { doc, again } = read('See [[Note#H|alias]], ![[img.png|300]] and \\[[escaped]].\n');
     expect(doc).toBe(

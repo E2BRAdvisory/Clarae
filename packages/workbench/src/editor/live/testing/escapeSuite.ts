@@ -133,7 +133,7 @@ export function describeEscapeInvariant(): void {
           continue;
         }
         // read again: one paragraph with the same text (`==x==` typed is a highlight once read: the
-        // index does not know highlights, and Reading shows the text highlighted, as Obsidian does)
+        // index does not know highlights, and Reading shows the text highlighted)
         if (/==/.test(text)) continue;
         const back = core.parse(md);
         const same =

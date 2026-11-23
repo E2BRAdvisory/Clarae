@@ -255,7 +255,7 @@ export const api = {
       format: 'png' | 'svg',
       base64: string,
     ): Promise<string> => DrawingAPI.WriteExport(vaultId, drawingPath, variant, format, base64),
-    /** Converts an Obsidian ".excalidraw.md" into a ".excalidraw" next to it; returns its path. */
+    /** Converts a legacy ".excalidraw.md" into a ".excalidraw" next to it; returns its path. */
     importLegacy: (vaultId: string, path: string): Promise<string> =>
       DrawingAPI.ImportLegacy(vaultId, path),
   },

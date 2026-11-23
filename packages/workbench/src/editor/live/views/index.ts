@@ -1,4 +1,4 @@
-// The views of the Live editor (A-W5a): what Obsidian's constructs look like in the document, and what
+// The views of the Live editor (A-W5a): what the OFM constructs look like in the document, and what
 // the pointer does with them. Installed by the real editor only (crepe.ts), after Crepe's own features
 // so that the views that replace theirs (the images) win; the headless editor of the fidelity tests
 // has no use for a screen.

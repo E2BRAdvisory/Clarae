@@ -101,7 +101,7 @@ async function open(raw: string, over: Parameters<typeof openLive>[1] = {}): Pro
 
 const app = (over: Partial<LiveInputApp> = {}): LiveInputApp => ({ ...inertInput, ...over });
 
-describe('what is typed as Obsidian syntax is the construct, not the text', () => {
+describe('what is typed as OFM syntax is the construct, not the text', () => {
   it('turns [[x]] into a wikilink, and ![[x]] into an embed, never into escaped brackets', async () => {
     const ed = await open('para\n');
     ed.end();

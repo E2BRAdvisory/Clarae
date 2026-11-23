@@ -2,7 +2,7 @@
 // .clarae/bookmarks.json. Everything here is pure: functions take the item list
 // and return a new one, so tree operations are easy to test and to persist.
 //
-// File shape (compatible in spirit with Obsidian's bookmarks.json; unknown
+// File shape (a shape common to other editors' bookmarks.json; unknown
 // fields and unknown item types are preserved on save):
 //
 //   { "version": 1,

@@ -624,7 +624,7 @@
     "drawing_laser_pointer": "Disegno: puntatore laser",
     "drawing_slideshow": "Disegno: avvia la presentazione (ogni cornice è una diapositiva)",
     "drawing_tools_panel": "Disegno: apri il pannello strumenti",
-    "drawing_import_legacy": "Disegno: converti un .excalidraw.md di Obsidian in un disegno",
+    "drawing_import_legacy": "Disegno: converti un .excalidraw.md in un disegno",
     "drawing_import_library": "Disegno: importa una libreria di forme (.excalidrawlib)",
     "drawing_export_library": "Disegno: esporta la libreria di forme (.excalidrawlib)",
     "drawing_export_png": "Disegno: esporta come immagine PNG…",
@@ -969,7 +969,7 @@
     "library": {
       "importTitle": "Importa una libreria di forme",
       "exportTitle": "Esporta la libreria di forme",
-      "legacyTitle": "Converti un disegno di Obsidian",
+      "legacyTitle": "Converti un disegno .excalidraw.md",
       "noFiles": "Nel vault non ci sono file {{suffix}}. Copiane prima uno nel vault.",
       "imported": "{{count}} forme importate nella libreria.",
       "exported": "Libreria salvata come {{path}}.",

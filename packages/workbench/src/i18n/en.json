@@ -624,7 +624,7 @@
     "drawing_laser_pointer": "Drawing: laser pointer",
     "drawing_slideshow": "Drawing: start the slideshow (each frame is a slide)",
     "drawing_tools_panel": "Drawing: open the tools panel",
-    "drawing_import_legacy": "Drawing: convert an Obsidian .excalidraw.md into a drawing",
+    "drawing_import_legacy": "Drawing: convert an .excalidraw.md into a drawing",
     "drawing_import_library": "Drawing: import a shape library (.excalidrawlib)",
     "drawing_export_library": "Drawing: export the shape library (.excalidrawlib)",
     "drawing_export_png": "Drawing: export as PNG image…",
@@ -969,7 +969,7 @@
     "library": {
       "importTitle": "Import a shape library",
       "exportTitle": "Export the shape library",
-      "legacyTitle": "Convert an Obsidian drawing",
+      "legacyTitle": "Convert an .excalidraw.md drawing",
       "noFiles": "There are no {{suffix}} files in this vault. Copy one into the vault first.",
       "imported": "{{count}} shapes imported into the library.",
       "exported": "Library saved as {{path}}.",

@@ -134,13 +134,13 @@ test('mind map from an outline text', async ({ page }) => {
   ).toEqual(['Build', 'Plan', 'Research', 'Test']);
 });
 
-test('an Obsidian .excalidraw.md is converted into a drawing and opened', async ({ page }) => {
+test('a legacy .excalidraw.md is converted into a drawing and opened', async ({ page }) => {
   const md =
     '# Excalidraw Data\n## Drawing\n```json\n' + scene([shape('a', 0, 0, 80, 80)]) + '\n```\n';
   await openDrawing(page, scene([]), { files: { 'Old.excalidraw.md': md } });
-  await runCommand(page, 'convert an Obsidian');
+  await runCommand(page, 'convert an .excalidraw.md');
   await page
-    .getByRole('listbox', { name: 'Convert an Obsidian drawing' })
+    .getByRole('listbox', { name: 'Convert an .excalidraw.md drawing' })
     .getByRole('button', { name: 'Old.excalidraw.md' })
     .click();
   await expect.poll(async () => (await listVaultFiles(page)).includes('Old.excalidraw')).toBe(true);

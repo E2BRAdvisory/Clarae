@@ -27,7 +27,7 @@ const titles = (items: BookmarkItem[]): string[] =>
   );
 
 describe('parse/serialize', () => {
-  it('reads an Obsidian-shaped file and keeps unknown fields', () => {
+  it('reads a file of the common shape and keeps unknown fields', () => {
     const text = JSON.stringify({
       items: [
         { type: 'file', ctime: 5, path: 'A.md', subpath: '#H', title: '', extra: 1 },

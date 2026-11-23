@@ -1705,7 +1705,7 @@ textarea.merge {
 .embed-drawing-wrap {
   display: block;
 }
-/* Alignment of drawing and canvas embeds: ![[x.excalidraw|300|left]] (Obsidian Excalidraw keywords). */
+/* Alignment of drawing and canvas embeds: ![[x.excalidraw|300|left]] (keywords of the third-party Excalidraw plugin). */
 .embed-drawing-wrap.align-left,
 .embed-drawing-wrap.align-right,
 .embed-drawing-wrap.align-center {

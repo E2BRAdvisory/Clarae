@@ -156,7 +156,9 @@ test('dragging a note and an image from the explorer onto the canvas adds them w
   expect(Object.values((await savedDrawing(page)).files)).toHaveLength(1);
 });
 
-test('an embed accepts the alignment keywords of the Obsidian plugin', async ({ page }) => {
+test('an embed accepts the alignment keywords of the third-party Excalidraw plugin', async ({
+  page,
+}) => {
   await openDrawing(page, scene([shape('a', 0, 0, 100, 60)]), {
     files: {
       'Note.md': '# Note\n\n![[Board.excalidraw|200|right-wrap]]\n\nText that flows around.\n',

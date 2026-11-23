@@ -5,7 +5,7 @@
 //     keeps the source text: link definitions and references, HTML, setext headings, indented code,
 //     footnote definitions, autolinks, character references, tables with a cell the editor cannot
 //     project, and every block touched by a multi-line %%comment%% or $$math$$.
-//  2. The Obsidian constructs are projected onto the tree: the spans come from `scanBody`, the very
+//  2. The OFM constructs are projected onto the tree: the spans come from `scanBody`, the very
 //     scanner of the indexer (B1), run on the whole source lines, and are placed on the mdast nodes
 //     by `position`: wikilinks and embeds, tags, ^block ids, ==highlights==, inline comments, inline
 //     footnotes. A span that cannot be placed exactly makes its block raw: the editor never shows

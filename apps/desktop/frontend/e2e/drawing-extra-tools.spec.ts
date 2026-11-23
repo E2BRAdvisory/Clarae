@@ -1,4 +1,4 @@
-// The tools of the Obsidian Excalidraw plugin: draw to shape, bucket fill and lasso selection.
+// The extra tools of the Excalidraw fork: draw to shape, bucket fill and lasso selection.
 import type { Page } from '@playwright/test';
 import { expect, test } from './support';
 import { openDrawing, savedDrawing, scene, shape, waitSaved } from './drawingHelpers';
