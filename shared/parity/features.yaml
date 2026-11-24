@@ -1704,13 +1704,28 @@ features:
     title: Modelli e note con identificativo unico
     desktop:
       status: yes
-      commands: [template:insert, template:new-from, unique:new]
+      commands:
+        [
+          template:insert,
+          template:new-from,
+          template:new-drawing-from,
+          template:new-presentation-from,
+          template:new,
+          template:save-as,
+          template:edit,
+          template:import-folder,
+          unique:new,
+        ]
       bindings:
         [
           TemplatesAPI.List,
           TemplatesAPI.Expand,
+          TemplatesAPI.Create,
           TemplatesAPI.CreateFromTemplate,
           TemplatesAPI.NewUnique,
+          TemplatesAPI.MigrationPlan,
+          TemplatesAPI.Migrate,
+          TemplatesAPI.DeclineMigration,
         ]
     workbench:
       status: partial
@@ -1719,6 +1734,9 @@ features:
       desktop:
         - apps/desktop/internal/app/bindings_templates_test.go
         - apps/desktop/internal/templates/templates_test.go
+        - apps/desktop/internal/sync/e2e_templates_test.go
+        - apps/desktop/frontend/e2e/templates.spec.ts
+        - packages/workbench/src/daily/migration.test.tsx
 
   - id: composer
     title: Unione ed estrazione di note

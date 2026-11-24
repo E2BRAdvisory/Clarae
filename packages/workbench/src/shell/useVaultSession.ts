@@ -4,6 +4,7 @@ import { isGraphPath } from '../graph/paths';
 import { normalizeLeftTab, normalizeRightTab, useAppStore } from '../state/store';
 import { useSettings } from '../state/settings';
 import { allPanes, parseLayout, removePath } from '../workspace/layout';
+import { offerTemplateMigration } from '../daily/migration';
 
 /**
  * Writes the layout and the sidebars of the open vault to `.clarae/workspace.json` now (the
@@ -76,6 +77,8 @@ export function useVaultSession(vaultId: string): boolean {
         // The workspace is saved from now on, even when it could not be read.
         if (!cancelled) ready.current = true;
       }
+      // Templates still in the folder of the vault they were in up to 1.8: offered the move, once.
+      if (!cancelled) await offerTemplateMigration(vaultId, () => !cancelled);
     })();
 
     let timer: ReturnType<typeof setTimeout> | undefined;

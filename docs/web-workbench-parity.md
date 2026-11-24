@@ -189,7 +189,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 88, partial 1, exceptio
 | `workspaces` Workspace salvati | yes | partial | n/a | workbench: non verificata sul web: nessun test salva o carica un workspace sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `actions.test.ts`, `model.test.ts` |
 | `preview` Anteprima dei link | yes | partial | n/a | workbench: non verificata sul web: nessun test apre l'anteprima di un link sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `popover.test.ts`, `target.test.ts` |
 | `daily` Note giornaliere | yes | partial | n/a | workbench: non verificata sul web: nessun test apre una nota giornaliera sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `daily.test.tsx`, `templates_test.go` |
-| `templates` Modelli e note con identificativo unico | yes | partial | n/a | workbench: non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `bindings_templates_test.go`, `templates_test.go` |
+| `templates` Modelli e note con identificativo unico | yes | partial | n/a | workbench: non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `bindings_templates_test.go`, `templates_test.go`, `e2e_templates_test.go`, `templates.spec.ts`, `migration.test.tsx` |
 | `composer` Unione ed estrazione di note | yes | partial | n/a | workbench: non verificata sul web: nessun test unisce o estrae note sul core WebAssembly; la UI e il codice Go sono quelli del desktop | D: `composer_test.go` |
 | `canvas` Canvas | yes | yes | n/a |  | D: `canvas.spec.ts`, `model.test.ts`, `canvas_test.go` · W: **`canvas.spec.ts`** |
 | `presentations` Presentazioni Marp (.marp) | yes | yes | n/a | desktop (nota): editor della sorgente a tutta larghezza, tab Slideshow con le card delle slide (riordino, esclusione, note, impostazioni), presentazione a tutto schermo, export HTML, PDF e PPTX modificabile dai pulsanti del ribbon, con le slide escluse lasciate fuori (ADR-0047, ADR-0048) | D: `engine.test.ts`, `slides.test.ts`, `pptx.test.ts`, `Ribbon.test.tsx`, `MarpShow.test.tsx`, `MarpSlidesPanel.test.tsx`, `SlidesPanel.test.tsx`, `indexer_test.go`, `merge_test.go`, `marp.spec.ts` · W: **`marp.spec.ts`** |
@@ -212,9 +212,9 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 88, partial 1, exceptio
 | `admin.storage` Spazio, quote e limiti | console-only | console-only | yes | desktop: amministrazione, solo nella console — workbench: amministrazione, solo nella console — console (nota): la rotta /admin porta qui (prima pagina dell'amministrazione) | K: `Storage.test.tsx`, `Limits.test.tsx`, `admin.spec.ts` · C: `quota_test.go`, `admin_test.go` |
 | `admin.audit` Registro di audit | console-only | console-only | yes | desktop: amministrazione, solo nella console — workbench: amministrazione, solo nella console | K: `Audit.test.tsx` · C: `admin_test.go` |
 
-### Comandi (208)
+### Comandi (214)
 
-197 su 208 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente; ogni comando dichiara la sua funzione (`Command.feature`, un `FeatureId` generato), che deve essere una di quelle che lo elencano.
+203 su 214 sono disponibili sul web; gli altri richiedono (`Command.requires`) una capability che il browser non ha. L'elenco viene dal registro a runtime (`packages/workbench/src/commands/parity.test.ts`), non dal sorgente; ogni comando dichiara la sua funzione (`Command.feature`, un `FeatureId` generato), che deve essere una di quelle che lo elencano.
 
 | Comando | Gruppo | Sul web | Funzione | Nota |
 | --- | --- | --- | --- | --- |
@@ -342,6 +342,12 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 88, partial 1, exceptio
 | `daily:next` | navigate | yes | `daily` | non verificata sul web: nessun test apre una nota giornaliera sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `unique:new` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `template:insert` | editor | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `template:new-drawing-from` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `template:new-presentation-from` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `template:new` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `template:save-as` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `template:import-folder` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `template:edit` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `template:new-from` | file | yes | `templates` | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `composer:merge` | file | yes | `composer` | non verificata sul web: nessun test unisce o estrae note sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `composer:extract` | editor | yes | `composer` | non verificata sul web: nessun test unisce o estrae note sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
@@ -447,9 +453,9 @@ I pulsanti dei pannelli che non sono comandi ma realizzano una funzione (`define
 | `account:sign-in` | yes | no (needs `ownsSession`) | `account.session` |
 | `account:sign-out` | yes | no (needs `ownsSession`) | `account.session` |
 
-### Binding Go (170 metodi, 24 servizi)
+### Binding Go (174 metodi, 24 servizi)
 
-Il dispatcher del core espone tutti i 170 metodi (verificato da `TestDispatcherMatchesTheGeneratedBindings`). **20 su 170** sono chiamati da un test del workbench web contro il core vero (`web/e2e`, `web/e2e-cloud`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (`task test-wasm`), ma non hanno ancora un test nel browser.
+Il dispatcher del core espone tutti i 174 metodi (verificato da `TestDispatcherMatchesTheGeneratedBindings`). **20 su 174** sono chiamati da un test del workbench web contro il core vero (`web/e2e`, `web/e2e-cloud`); gli altri girano nello stesso codice Go, provato sotto WASM dai test del core (`task test-wasm`), ma non hanno ancora un test nel browser.
 
 | Binding | Funzione | Chiamato in un test web | Nota |
 | --- | --- | --- | --- |
@@ -558,10 +564,14 @@ Il dispatcher del core espone tutti i 170 metodi (verificato da `TestDispatcherM
 | `SyncAPI.Unsent` | `sync.unsent` | — | solo il core (M26-S3): lo stesso codice Go gira nel core WASM, ma la UI e la prova sul web arrivano con M26-S4 |
 | `SyncAPI.Usage` | `usage` | — |  |
 | `TagsAPI.List` | `tags` | yes | non verificata sul web: nessun test, né sul desktop né sul web; la UI e il codice Go sono quelli del desktop |
+| `TemplatesAPI.Create` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.CreateFromTemplate` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.DailyAdjacent` | `daily` | — | non verificata sul web: nessun test apre una nota giornaliera sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `TemplatesAPI.DeclineMigration` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.Expand` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.List` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `TemplatesAPI.Migrate` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
+| `TemplatesAPI.MigrationPlan` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.NewUnique` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.OpenDaily` | `daily` | — | non verificata sul web: nessun test apre una nota giornaliera sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.ReadSettings` | `daily` | — | non verificata sul web: nessun test apre una nota giornaliera sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
@@ -714,9 +724,9 @@ Da `api/openapi.yaml`. **68 su 83** sono chiamate dalla console (`web/src`); le 
 | `getExport` | GET `/vaults/{vaultId}/exports/{exportId}` | `export.zip` | yes |
 | `downloadExport` | GET `/vaults/{vaultId}/exports/{exportId}/download` | `export.zip` | — |
 
-### Spec e2e per target (45)
+### Spec e2e per target (46)
 
-Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **35** interi, **7** in parte, **3** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
+Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **36** interi, **7** in parte, **3** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
 
 | Spec | Test | Desktop (mock) | Web (core) | Esclusioni sul web |
 | --- | --- | --- | --- | --- |
@@ -761,6 +771,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/sharing.spec.ts` | 2 | yes | yes | — |
 | `apps/desktop/frontend/e2e/slides.spec.ts` | 3 | yes | yes | — |
 | `apps/desktop/frontend/e2e/status-bar.spec.ts` | 1 | yes | yes | — |
+| `apps/desktop/frontend/e2e/templates.spec.ts` | 5 | yes | yes | — |
 | `apps/desktop/frontend/e2e/terminal.spec.ts` | 12 | yes | partial (1 of 12 skipped) | `terminal` (un test): the browser cannot start processes: the workbench has no terminal |
 | `apps/desktop/frontend/e2e/ui-perf.spec.ts` | 2 | opt-in | no | `files.explorer`: the harness seeds 10 000 notes into the Wails mock and its budgets are calibrated on it (docs/qa) |
 | `apps/desktop/frontend/e2e/webapp.spec.ts` | 22 | yes | partial (16 of 22 skipped) | `webapp.embedded` (un test): the card for a profile that turns the browser off needs a desktop that has one; the web has the other card · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the web never has an embedded browser: its card is covered by the first specs · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in · `webapp.embedded` (un test): the browser has no native view to put a page in |
