@@ -1516,7 +1516,7 @@ Segnalazione dell'owner del 2026-11-23, con screenshot, dopo la 1.8.5: nell'app 
 
 Richiesta dell'owner del 2026-11-24, con schizzo: posizione fissa dei template dentro `.clarae` del vault, template di default per note, disegni e presentazioni, «Nuovo disegno/presentazione da template», «Applica template». Deviazione dallo spec registrata in [ADR-0068](adr/0068-template-in-clarae-templates.md) (proposta).
 
-**Stato (2026-11-24): M31-S1…S4 fatte, non committate. Verdi: test Go con `-race` di `shared/go` e `apps/desktop/internal`, i tre e2e di sync dei template contro il cloud reale, `task lint-go`, typecheck, vitest completo del workbench, `task parity`, `e2e/templates.spec.ts` su Chromium. Non eseguiti: `task ci` completo, `task check-gen`, Playwright su WebKit e sul core WASM, prova manuale nell'app desktop.**
+**Stato (2026-11-24): M31-S1…S5 fatte e committate per sessione, rilasciate nella versione 1.8.7 (tag `v1.8.7` locale, non ancora su origin). Verdi: test Go con `-race` di `shared/go` e `apps/desktop/internal`, i tre e2e di sync dei template contro il cloud reale, `task lint-go`, typecheck, vitest completo del workbench, `task parity`, `e2e/templates.spec.ts` su Chromium. Non eseguiti: `task ci` completo, `task check-gen`, Playwright su WebKit e sul core WASM, prova manuale nell'app desktop.**
 
 | Onda  | Sessione | Contenuto                                                                                                                                                                                                                                                                                                                                                                   | Stato              |
 | ----- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
@@ -1524,6 +1524,7 @@ Richiesta dell'owner del 2026-11-24, con schizzo: posizione fissa dei template d
 | **B** | M31-S2   | Frontend: tre default nelle Impostazioni con elenco di gestione, «Nuovo disegno/presentazione da template», «Applica template» sensibile al contesto (`cloneScene`, `insertSlidesEdit`), «Nuovo template», «Salva come template», «Modifica template»                                                                                                                       | fatta (2026-11-24) |
 | **C** | M31-S3   | Migrazione nell'interfaccia: domanda una volta all'apertura del vault, comando «Importa template dalla cartella…»; `e2e/templates.spec.ts`, `daily/migration.test.tsx`                                                                                                                                                                                                      | fatta (2026-11-24) |
 | **D** | M31-S4   | ADR-0068, questa sezione, guida utente, CHANGELOG                                                                                                                                                                                                                                                                                                                           | fatta (2026-11-24) |
+| **E** | M31-S5   | Versione 1.8.7: contratto, stub, esempio Compose, perimetro del pentest, CHANGELOG, tag `v1.8.7`                                                                                                                                                                                                                                                                            | fatta (2026-11-24) |
 
 **Rischi e sospesi**
 
@@ -1531,7 +1532,7 @@ Richiesta dell'owner del 2026-11-24, con schizzo: posizione fissa dei template d
 - Nessun test dell'«Applica template» su un disegno nell'editor reale, né dell'elenco dei template nelle Impostazioni; il dialogo di prima apertura è coperto solo da vitest.
 - La scheda di un template non segue il file quando passa tra il nome 1.x e quello corrente della cartella di configurazione.
 - Le impostazioni di un mount viaggiano nella condivisione (comportamento precedente a M31, emerso qui): da decidere a parte.
-- Revisione avversariale di sync, merge e migrazione da fare prima dei commit.
+- La revisione avversariale di sync, merge e migrazione è stata fatta e i suoi rilievi corretti (chiavi del core conservate da `WriteSettings`, nessuna creazione dentro `.clarae/templates/`, lettura stretta del collegamento, `daily.json` non valido lasciato intatto, potatura delle sole cartelle svuotate, schede che seguono i file).
 
 ---
 

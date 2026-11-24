@@ -6,7 +6,9 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
-Milestone M31 ([roadmap](docs/roadmap.md) §13-quatervicies), [ADR-0068](docs/adr/0068-template-in-clarae-templates.md) (proposta): **i template stanno nella cartella `.clarae/templates` del vault e valgono per note, disegni e presentazioni**. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
+## [1.8.7] - 2026-11-24
+
+Milestone M31 ([roadmap](docs/roadmap.md) §13-quatervicies), sessioni M31-S1…S5, [ADR-0068](docs/adr/0068-template-in-clarae-templates.md) (proposta): **i template stanno nella cartella `.clarae/templates` del vault e valgono per note, disegni e presentazioni**. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
 
 ### Client desktop e workbench
 
@@ -17,6 +19,15 @@ Milestone M31 ([roadmap](docs/roadmap.md) §13-quatervicies), [ADR-0068](docs/ad
 - **Template esistenti**: all'apertura di un vault con template nella vecchia cartella l'app chiede una volta se spostarli; i riferimenti nelle impostazioni vengono aggiornati e quelli vecchi continuano a funzionare. Lo spostamento non avviene sui vault in sola lettura, sulle cartelle condivise con voi e quando la cartella dei template è condivisa con altri.
 - **Sincronizzazione**: un template modificato su due dispositivi viene fuso come la nota o il disegno che è, senza copia di conflitto. I dispositivi non ancora aggiornati non elencano i template spostati e, su una modifica concorrente, producono una copia di conflitto.
 - **Cartelle condivise con voi**: non vi si creano template propri; per un gruppo resta la libreria di template, che ora offre anche disegni e presentazioni.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 1.8.7 (stub rigenerati); nessuna operazione nuova.
+- Binding del core (desktop e WebAssembly): `TemplatesAPI.List` senza la cartella, `TemplateInfo` con `kind` e `rel`; nuovi `Create`, `MigrationPlan`, `Migrate`, `DeclineMigration`.
+
+### Verificato
+
+Sull'albero della 1.8.7: test Go con `-race` di `shared/go` e di `apps/desktop/internal`; i tre test di sync dei template contro il cloud reale (`-tags integration`: merge per contenuto, spostamento con lo stesso id di file, cartella di configurazione di un mount); `task lint-go`; typecheck; vitest completo del workbench (2772 test); `task parity` (99 funzioni, 214 comandi); `e2e/templates.spec.ts`, `marp.spec.ts` e `drawing.spec.ts` su Chromium; una revisione avversariale di sync, merge e migrazione, con i rilievi corretti. **Non eseguiti:** `task ci` completo (`vet-windows`, `vet-linux`, `govulncheck`, conformance, `test-wasm`, `test-core`, `web-budget`, `check-gen`), l'intera `task e2e`, Playwright su WebKit e sul core WebAssembly, `test-integration`, e una prova manuale nell'app desktop. `task lint-ts` passa eslint ma si ferma sulla formattazione di una cartella `skills/` non tracciata, estranea a questa versione.
 
 ## [1.8.6] - 2026-11-24
 
