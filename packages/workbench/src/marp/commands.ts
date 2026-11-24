@@ -16,6 +16,7 @@ import { activeTab } from '../workspace/layout';
 import { exportAssets } from './assets';
 import { useMarpShow } from './showStore';
 import { displayName } from '../embeds/media';
+import { templateText } from '../daily/templateContent';
 
 /** The first content of a new presentation: Marp on, the default theme, page numbers, two slides. */
 export function newDeckContent(title: string): string {
@@ -27,14 +28,20 @@ export const isDeck = (path: string): boolean => /\.marp$/i.test(path);
 const titleOf = (path: string): string => displayName(path);
 
 /** Creates a presentation next to the active file (or in dir) and opens it. */
-export async function newPresentation(opts: { dir?: string } = {}): Promise<string> {
+export async function newPresentation(
+  opts: { dir?: string; template?: string } = {},
+): Promise<string> {
   const { vault, layout } = useAppStore.getState();
   if (!vault) throw new Error('no vault is open');
   const tab = activeTab(layout);
   const tree = await api.vault.listTree(vault.id);
   const base = drawingBaseName(new Date()).replace(/^Drawing/, 'Presentation');
   const path = uniqueName(tree, opts.dir ?? (tab ? folderOf(tab.path) : ''), base, '.marp');
-  await api.vault.writeNote(vault.id, path, newDeckContent(titleOf(path)), '');
+  const title = titleOf(path);
+  // The template asked for, else the one of the settings, else the built-in first two slides.
+  const content =
+    (await templateText(vault.id, 'presentation', title, opts.template)) ?? newDeckContent(title);
+  await api.vault.writeNote(vault.id, path, content, '');
   invalidateVault(vault.id);
   useAppStore.getState().openNote(path, { newTab: true });
   return path;

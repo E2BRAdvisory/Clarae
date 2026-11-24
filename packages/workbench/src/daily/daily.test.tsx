@@ -13,12 +13,16 @@ import { DialogHost } from '../ui/dialogs';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import {
+  listTemplates,
+  newDrawingFromTemplate,
   newNoteFromTemplate,
+  newPresentationFromTemplate,
   newUniqueNote,
   openAdjacentDaily,
   openDaily,
   openRandomNote,
   pickRandom,
+  templateLabel,
 } from './actions';
 import { defaultNotesSettings, resolveNotesSettings, useNotesSettings } from './settings';
 
@@ -117,8 +121,13 @@ describe('unique notes and templates', () => {
   });
 
   it('creates a note from a picked template', async () => {
-    files().set('Templates/Meeting.md', 'Meeting {{title}}');
-    files().set('Templates/Book.md', 'Book');
+    files().set('.clarae/templates/Meeting.md', 'Meeting {{title}}');
+    files().set('.clarae/templates/Book.md', 'Book');
+    // A note is created from the template of a note: the others are not offered, nor is a note
+    // of the folder the templates were in up to 1.8.
+    files().set('.clarae/templates/Board.excalidraw', '{}');
+    files().set('.clarae/templates/Talk.marp', '# talk');
+    files().set('Templates/Old.md', 'old');
     render(<DialogHost />);
     const done = newNoteFromTemplate();
     const list = await screen.findByRole('listbox', { name: 'Choose a template' });
@@ -132,25 +141,125 @@ describe('unique notes and templates', () => {
   });
 
   it('applies the template for new notes to every new note', async () => {
-    files().set('Templates/Note.md', '# {{title}}\n\ntags: #inbox\n');
+    files().set('.clarae/templates/Note.md', '# {{title}}\n\ntags: #inbox\n');
     expect(files().get(await createNote({ name: 'Plain', open: false }))).toBe('');
     useNotesSettings.setState({
-      settings: { ...defaultNotesSettings, newNoteTemplate: 'Templates/Note.md' },
+      settings: { ...defaultNotesSettings, newNoteTemplate: '.clarae/templates/Note.md' },
     });
     const path = await createNote({ name: 'Idea', open: false });
     expect(files().get(path)).toBe('# Idea\n\ntags: #inbox\n');
     // A template that disappeared leaves the note empty instead of failing.
-    files().delete('Templates/Note.md');
+    files().delete('.clarae/templates/Note.md');
     expect(files().get(await createNote({ name: 'Later', open: false }))).toBe('');
+  });
+
+  it('lists the templates of the vault by kind, labelled with their sub-folder', async () => {
+    files().set('.clarae/templates/Work/Meeting.md', 'm');
+    files().set('.clarae/templates/Board.excalidraw', '{}');
+    files().set('.clarae/templates/Talk.marp', '# talk');
+    files().set('.clarae/templates/logo.png', 'png');
+    files().set('.clarae/editor.json', '{}');
+    expect((await listTemplates('note')).map((t) => [t.ref, templateLabel(t)])).toEqual([
+      ['.clarae/templates/Work/Meeting.md', 'Meeting (Work)'],
+    ]);
+    expect((await listTemplates('drawing')).map(templateLabel)).toEqual(['Board']);
+    expect((await listTemplates('presentation')).map(templateLabel)).toEqual(['Talk']);
+    expect(
+      templateLabel({ name: 'Shared', rel: 'a/Shared.md', source: 'library', library: 'Team' }),
+    ).toBe('Shared (Team)');
+  });
+
+  it('keeps the keys the core writes to the settings file when a setting is saved', async () => {
+    files().set(
+      '.clarae/daily.json',
+      JSON.stringify({
+        templatesFolder: 'Models',
+        templatesMigrated: true,
+        templatesMigratedFrom: 'Models',
+      }),
+    );
+    await useNotesSettings.getState().load(vaultId);
+    useNotesSettings.getState().set({ dailyFolder: 'Journal' });
+    await waitFor(() =>
+      expect(JSON.parse(files().get('.clarae/daily.json') ?? '{}')).toEqual({
+        templatesFolder: 'Models',
+        templatesMigrated: true,
+        templatesMigratedFrom: 'Models',
+        dailyFolder: 'Journal',
+      }),
+    );
   });
 
   it('tells when there are no templates', async () => {
     render(<DialogHost />);
     void newNoteFromTemplate();
-    expect(
-      await screen.findByText(/No templates found in the "Templates" folder/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/no templates of this kind yet/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+  });
+});
+
+describe('drawings and presentations from templates', () => {
+  const scene = JSON.stringify({
+    type: 'excalidraw',
+    version: 2,
+    elements: [{ id: 'a', type: 'rectangle', x: 0, y: 0, width: 10, height: 10 }],
+    appState: {},
+    files: {},
+  });
+  const created = (ext: string): string[] =>
+    [...files().keys()].filter((p) => p.endsWith(ext) && !p.startsWith('.clarae/'));
+
+  it('starts every new drawing and presentation from the template of the settings', async () => {
+    const { newDrawing } = await import('../drawing/commands');
+    const { newPresentation } = await import('../marp/commands');
+    files().set('.clarae/templates/Board.excalidraw', scene);
+    files().set('.clarae/templates/Talk.marp', '---\nmarp: true\n---\n\n# {{title}}\n');
+    // Without a choice: the built-in first content.
+    expect(files().get(await newDrawing({ dir: 'A' }))).not.toBe(scene);
+    expect(files().get(await newPresentation({ dir: 'A' }))).toContain('theme: default');
+    useNotesSettings.setState({
+      settings: {
+        ...defaultNotesSettings,
+        newDrawingTemplate: '.clarae/templates/Board.excalidraw',
+        newPresentationTemplate: '.clarae/templates/Talk.marp',
+      },
+    });
+    expect(files().get(await newDrawing({ dir: 'B' }))).toBe(scene);
+    const deck = await newPresentation({ dir: 'B' });
+    expect(files().get(deck)).toMatch(/^---\nmarp: true\n---\n\n# Presentation /);
+    // A template that is gone, or is not a drawing, never fails the creation.
+    files().set('.clarae/templates/Board.excalidraw', '# not a drawing');
+    files().delete('.clarae/templates/Talk.marp');
+    expect(files().get(await newDrawing({ dir: 'C' }))).not.toBe('# not a drawing');
+    expect(files().get(await newPresentation({ dir: 'C' }))).toContain('theme: default');
+  });
+
+  it('creates a drawing and a presentation from a picked template', async () => {
+    files().set('.clarae/templates/Board.excalidraw', scene);
+    files().set('.clarae/templates/Talk.marp', '# from the template\n');
+    files().set('.clarae/templates/Note.md', 'a note');
+    render(<DialogHost />);
+    let done = newDrawingFromTemplate();
+    let list = await screen.findByRole('listbox', { name: 'Choose a template' });
+    expect(list.querySelectorAll('button')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }));
+    await done;
+    expect(created('.excalidraw').map((p) => files().get(p))).toEqual([scene]);
+
+    done = newPresentationFromTemplate();
+    list = await screen.findByRole('listbox', { name: 'Choose a template' });
+    expect(list.querySelectorAll('button')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Talk' }));
+    await done;
+    expect(created('.marp').map((p) => files().get(p))).toEqual(['# from the template\n']);
+  });
+
+  it('never creates next to a template that is open in a tab', async () => {
+    const { newDrawing } = await import('../drawing/commands');
+    files().set('.clarae/templates/Note.md', 'a note');
+    useAppStore.getState().openNote('.clarae/templates/Note.md');
+    expect(await newDrawing()).not.toMatch(/^\.clarae\//);
+    expect(await createNote({ name: 'Idea', open: false })).toBe('Idea.md');
   });
 });
 

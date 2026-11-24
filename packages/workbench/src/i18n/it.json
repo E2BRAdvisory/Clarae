@@ -240,7 +240,7 @@
     "section_drawing": "Disegni",
     "daily": {
       "templates": "Template",
-      "templatesFolder": "Cartella dei template",
+      "templatesWhere": "I template di note, disegni e presentazioni stanno nella cartella di configurazione del vault:",
       "variablesHelp": "I formati usano i token Moment (YYYY, MM, DD, dddd, HH, mm, ...); le variabili sconosciute restano invariate.",
       "daily": "Note giornaliere",
       "folder": "Cartella",
@@ -257,7 +257,12 @@
       "extractEmbed": "Sostituisci la selezione estratta con un'incorporazione (invece di un link)",
       "extractFrontmatter": "Copia le proprietà nella nota estratta",
       "editor": "Editor",
-      "slash": "Comandi slash (menu «/»)"
+      "slash": "Comandi slash (menu «/»)",
+      "newDrawingTemplate": "Template di ogni nuovo disegno",
+      "newPresentationTemplate": "Template di ogni nuova presentazione",
+      "openTemplate": "Apri",
+      "deleteTemplate": "Elimina template",
+      "noTemplates": "Questo vault non ha ancora template."
     },
     "pagePreview": "Anteprima della pagina al passaggio sul link",
     "pagePreviewAlways": "Mostra l’anteprima senza tenere premuto Cmd/Ctrl",
@@ -582,7 +587,7 @@
     "daily_previous": "Apri la nota giornaliera precedente",
     "daily_next": "Apri la nota giornaliera successiva",
     "unique_new": "Nuova nota unica",
-    "template_insert": "Inserisci template",
+    "template_insert": "Applica template",
     "template_new_from": "Nuova nota da template",
     "composer_merge": "Unisci la nota corrente in un'altra nota",
     "composer_extract": "Estrai la selezione in una nuova nota",
@@ -638,7 +643,13 @@
     "terminal_new_tab": "Terminale: nuova scheda",
     "terminal_close_tab": "Terminale: chiudi la scheda",
     "terminal_undock": "Terminale: sgancia in una finestra separata",
-    "terminal_dock": "Terminale: riaggancia a Clarae"
+    "terminal_dock": "Terminale: riaggancia a Clarae",
+    "template_new_drawing_from": "Nuovo disegno da template",
+    "template_new_presentation_from": "Nuova presentazione da template",
+    "template_new": "Nuovo template",
+    "template_save_as": "Salva come template",
+    "template_edit": "Modifica template",
+    "template_import_folder": "Importa template dalla cartella…"
   },
   "sync": {
     "title": "Sync",
@@ -1200,9 +1211,31 @@
   "templates": {
     "title": "Template",
     "pick": "Scegli un template",
-    "none": "Nessun template nella cartella «{{folder}}».",
+    "none": "Non ci sono ancora template di questo tipo in questo vault.",
     "newName": "Nome della nuova nota",
-    "library": "libreria"
+    "library": "libreria",
+    "kindPick": "Che cosa crea il template?",
+    "kind_note": "Nota",
+    "kind_drawing": "Disegno",
+    "kind_presentation": "Presentazione",
+    "templateName": "Nome del template",
+    "saved": "Template «{{name}}» salvato.",
+    "emptyDrawing": "Il template non contiene elementi da aggiungere.",
+    "migration": {
+      "title": "Template del vault",
+      "move": "Sposta",
+      "ask_one": "In «{{folder}}» c'è {{count}} template. I template ora stanno nella cartella .clarae/templates del vault: spostarlo lì? Non comparirà più tra le note, e i link verso di esso non si risolveranno più.",
+      "ask_other": "In «{{folder}}» ci sono {{count}} template. I template ora stanno nella cartella .clarae/templates del vault: spostarli lì? Non compariranno più tra le note, e i link verso di essi non si risolveranno più.",
+      "askImport": "Spostare note, disegni e presentazioni della vecchia cartella dei template in .clarae/templates? Non compariranno più tra le note, e i link verso di essi non si risolveranno più.",
+      "moved_one": "{{count}} template spostato.",
+      "moved_other": "{{count}} template spostati.",
+      "skipped": "Rimasti dove sono, perché esiste già un template con lo stesso nome: {{list}}",
+      "nothing": "Nessun template da spostare in «{{folder}}».",
+      "blocked_read_only": "Questo vault è in sola lettura: i template restano dove sono.",
+      "blocked_mount": "Questa cartella è condivisa con te: i suoi template restano dove sono.",
+      "blocked_shared_folder": "La cartella dei template è condivisa con altri: spostarla toglierebbe loro i file. I template restano dove sono e continuano a funzionare.",
+      "blocked_offline": "Non è stato possibile leggere le condivisioni del vault: riprova quando sei in linea."
+    }
   },
   "composer": {
     "mergeTitle": "Unisci nota",
@@ -1234,7 +1267,7 @@
     "wikilink": "Link interno",
     "embed": "Incorpora",
     "drawing": "Disegno",
-    "template": "Inserisci template",
+    "template": "Applica template",
     "date": "Data di oggi",
     "group": {
       "text": "Testo",

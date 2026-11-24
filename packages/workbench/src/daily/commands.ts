@@ -8,9 +8,17 @@ import { infoOf, useSync } from '../state/sync';
 import { useAppStore } from '../state/store';
 import { dialog } from '../ui/dialogs';
 import { activeTab } from '../workspace/layout';
+import { Feature } from '@clarae/api-client/features';
+import { featureOn, useManaged } from '../state/managed';
+import { importTemplatesFolder } from './migration';
 import {
-  insertTemplate,
+  applyTemplate,
+  editTemplate,
+  newDrawingFromTemplate,
   newNoteFromTemplate,
+  newPresentationFromTemplate,
+  newTemplate,
+  saveAsTemplate,
   newUniqueNote,
   openAdjacentDaily,
   openDaily,
@@ -28,6 +36,13 @@ const inNote = (): boolean => {
   const t = activeTab(store().layout);
   return !!t && t.mode !== 'reading' && getActiveEditor() !== null;
 };
+
+const flagOn = (name: Feature): boolean => featureOn(useManaged.getState().features, name);
+const ext = (re: RegExp): boolean => re.test(activePath() ?? '');
+/** The kinds of file a template exists for, when their function is on. */
+const isDrawing = (): boolean => ext(/\.excalidraw$/i) && flagOn(Feature.Drawings);
+const isDeck = (): boolean => ext(/\.marp$/i) && flagOn(Feature.Presentations);
+const isNote = (): boolean => ext(/\.md$/i);
 
 async function guard(p: Promise<unknown>): Promise<void> {
   try {
@@ -75,8 +90,57 @@ export const notesCommands: Command[] = [
     group: 'editor',
     feature: 'templates',
     defaults: [],
-    enabled: () => canWrite() && inNote(),
-    run: () => guard(insertTemplate()),
+    // "Apply template": the id is the one of "Insert template", so the hotkeys set for it stay.
+    enabled: () => canWrite() && ((isNote() && inNote()) || isDrawing() || (isDeck() && inNote())),
+    run: () => guard(applyTemplate()),
+  },
+  {
+    id: 'template:new-drawing-from',
+    group: 'file',
+    feature: 'templates',
+    defaults: [],
+    enabled: () => canWrite() && flagOn(Feature.Drawings),
+    run: () => guard(newDrawingFromTemplate()),
+  },
+  {
+    id: 'template:new-presentation-from',
+    group: 'file',
+    feature: 'templates',
+    defaults: [],
+    enabled: () => canWrite() && flagOn(Feature.Presentations),
+    run: () => guard(newPresentationFromTemplate()),
+  },
+  {
+    id: 'template:new',
+    group: 'file',
+    feature: 'templates',
+    defaults: [],
+    enabled: canWrite,
+    run: () => guard(newTemplate()),
+  },
+  {
+    id: 'template:save-as',
+    group: 'file',
+    feature: 'templates',
+    defaults: [],
+    enabled: () => canWrite() && (isNote() || isDrawing() || isDeck()),
+    run: () => guard(saveAsTemplate()),
+  },
+  {
+    id: 'template:import-folder',
+    group: 'file',
+    feature: 'templates',
+    defaults: [],
+    enabled: canWrite,
+    run: () => guard(importTemplatesFolder()),
+  },
+  {
+    id: 'template:edit',
+    group: 'file',
+    feature: 'templates',
+    defaults: [],
+    enabled: hasVault,
+    run: () => guard(editTemplate()),
   },
   {
     id: 'template:new-from',

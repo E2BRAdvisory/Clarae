@@ -1,3 +1,4 @@
+import { deckBody as deckBodyT, insertSlidesEdit as insertSlidesEditT } from './slides';
 import { describe, expect, it } from 'vitest';
 import { EditorState, type ChangeSpec } from '@codemirror/state';
 import { renderDeck } from './engine';
@@ -519,5 +520,44 @@ describe('page numbers when slides are left out (ADR-0048)', () => {
   ])('closes the gap the way Marp numbers the kept slides alone (%s)', async (_l, src, want) => {
     const deck = await renderDeck(src, none);
     expect(pages(includedDeck(deck).html)).toEqual(want);
+  });
+});
+
+describe('slides of a template', () => {
+  const apply = (source: string, lines: number[], index: number, body: string): string => {
+    const [e] = insertSlidesEditT(source, lines, index, body);
+    return e ? source.slice(0, e.from) + (e.insert ?? '') + source.slice(e.to ?? e.from) : source;
+  };
+
+  it('takes the slides of a template without its frontmatter', () => {
+    expect(deckBodyT('---\nmarp: true\ntheme: gaia\n---\n\n# One\n\n---\n\n# Two\n\n')).toBe(
+      '# One\n\n---\n\n# Two',
+    );
+    expect(deckBodyT('# Only\r\ntext\r\n')).toBe('# Only\ntext');
+    expect(deckBodyT('---\nmarp: true\n---\n')).toBe('');
+  });
+
+  it('adds them after the slide of the cursor', () => {
+    const source = '---\nmarp: true\n---\n\n# A\n\n---\n\n# B\n';
+    expect(apply(source, [0, 6], 0, '# T')).toBe(
+      '---\nmarp: true\n---\n\n# A\n\n---\n\n# T\n\n---\n\n# B\n',
+    );
+    expect(apply(source, [0, 6], 1, '# T')).toBe(
+      '---\nmarp: true\n---\n\n# A\n\n---\n\n# B\n\n---\n\n# T\n',
+    );
+    expect(apply(source, [0, 6], 9, '# T')).toBe(apply(source, [0, 6], 1, '# T'));
+  });
+
+  it('fills a presentation that holds nothing, and does nothing with an empty template', () => {
+    expect(apply('---\nmarp: true\n---\n', [0], 0, '# T')).toBe('---\nmarp: true\n---\n\n# T\n');
+    expect(apply('', [0], 0, '# T')).toBe('\n# T\n');
+    expect(insertSlidesEditT('# A\n', [0], 0, '  \n')).toEqual([]);
+  });
+
+  it('adds no separator where headings divide the slides', () => {
+    const source = '---\nmarp: true\nheadingDivider: 1\n---\n\n# A\n\ntext\n\n# B\n';
+    expect(apply(source, [0, 9], 0, '# T\n\nmore')).toBe(
+      '---\nmarp: true\nheadingDivider: 1\n---\n\n# A\n\ntext\n\n# T\n\nmore\n\n# B\n',
+    );
   });
 });

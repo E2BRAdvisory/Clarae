@@ -10,6 +10,8 @@ import type {
   MergeResult,
   NoteResult,
   TemplateInfo,
+  TemplateKind,
+  TemplateMigration,
   UniqueOptions,
 } from '../../app/api';
 import type { MockVault } from './index';
@@ -57,7 +59,49 @@ const join = (folder: string, name: string): string => {
   return f ? `${f}/${name}` : name;
 };
 
+/** The templates folder of a vault, as the core lists it (ADR-0068). */
+export const TEMPLATES_DIR = '.clarae/templates';
+const EXT: Record<TemplateKind, string> = {
+  note: '.md',
+  drawing: '.excalidraw',
+  presentation: '.marp',
+};
+const kindOf = (p: string): TemplateKind | null =>
+  (Object.keys(EXT) as TemplateKind[]).find((k) => p.toLowerCase().endsWith(EXT[k])) ?? null;
+const nameOf = (p: string): string => p.replace(/^.*\//, '').replace(/\.[^./]+$/, '');
+
 export function notesMock({ vaultOf, resolve, changed }: Ctx) {
+  /** daily.json as the core reads it for the migration: every key, the unknown ones included. */
+  const daily = (v: MockVault): Record<string, unknown> => {
+    try {
+      const o: unknown = JSON.parse(v.files.get('.clarae/daily.json') ?? '{}');
+      return o && typeof o === 'object' && !Array.isArray(o) ? (o as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  };
+  const migrationOf = (v: MockVault, ignoreDone: boolean): TemplateMigration => {
+    const d = daily(v);
+    const plan: TemplateMigration = {
+      folder: '',
+      files: [],
+      moved: 0,
+      paths: {},
+      skipped: [],
+      blocked: '',
+      done: false,
+    };
+    if (d['templatesMigrated'] === true && !ignoreDone) return { ...plan, done: true };
+    const named = [d['templatesFolder'], d['templatesMigratedFrom']].find(
+      (x): x is string => typeof x === 'string' && x.replace(/^\/+|\/+$/g, '') !== '',
+    );
+    const folder = (named ?? 'Templates').replace(/^\/+|\/+$/g, '');
+    const files = [...v.files.keys()]
+      .filter((p) => p.startsWith(folder + '/') && kindOf(p) !== null)
+      .sort();
+    return { ...plan, folder, files };
+  };
+
   const readTemplate = (v: MockVault, ref: string): string => {
     if (!ref) return '';
     const p = ref.replace(/^library:/, '');
@@ -85,18 +129,99 @@ export function notesMock({ vaultOf, resolve, changed }: Ctx) {
       vaultOf(id).files.set('.clarae/daily.json', content);
       return Promise.resolve();
     },
-    List: (id: string, folder: string): Promise<TemplateInfo[]> => {
-      const f = (folder || 'Templates').replace(/\/+$/, '');
-      return Promise.resolve(
+    List: (id: string): Promise<TemplateInfo[]> =>
+      Promise.resolve(
         [...vaultOf(id).files.keys()]
-          .filter((p) => p.endsWith('.md') && p.startsWith(f + '/'))
-          .sort()
-          .map((p) => ({ name: stem(p), path: p, source: 'vault' as const, ref: p, library: '' })),
+          .filter((p) => p.startsWith(TEMPLATES_DIR + '/'))
+          .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+          .flatMap((p) => {
+            const kind = kindOf(p);
+            if (!kind) return [];
+            const rel = p.slice(TEMPLATES_DIR.length + 1);
+            return [
+              {
+                name: nameOf(p),
+                path: p,
+                rel,
+                kind,
+                source: 'vault' as const,
+                ref: p,
+                library: '',
+              },
+            ];
+          }),
+      ),
+    Create: (
+      id: string,
+      name: string,
+      kind: TemplateKind,
+      content: string,
+    ): Promise<TemplateInfo> => {
+      const v = vaultOf(id);
+      const ext = EXT[kind];
+      if (!ext) return Promise.reject(new Error(`invalid: unknown kind of template "${kind}"`));
+      const base = (name.toLowerCase().endsWith(ext) ? name.slice(0, -ext.length) : name)
+        .replace(/[\\/:*?"<>|]/g, ' ')
+        .trim();
+      const title = base || 'Untitled';
+      let rel = title + ext;
+      for (let n = 2; v.files.has(`${TEMPLATES_DIR}/${rel}`); n++) rel = `${title} ${n}${ext}`;
+      const path = `${TEMPLATES_DIR}/${rel}`;
+      v.files.set(path, content);
+      changed(id, [path], [path]);
+      return Promise.resolve({
+        name: nameOf(path),
+        path,
+        rel,
+        kind,
+        source: 'vault' as const,
+        ref: path,
+        library: '',
+      });
+    },
+    MigrationPlan: (id: string): Promise<TemplateMigration> =>
+      Promise.resolve(migrationOf(vaultOf(id), false)),
+    Migrate: (id: string): Promise<TemplateMigration> => {
+      const v = vaultOf(id);
+      const plan = migrationOf(v, true);
+      const refs = new Map<string, string>();
+      for (const from of plan.files) {
+        const to = `${TEMPLATES_DIR}/${from.slice(plan.folder.length + 1)}`;
+        if (v.files.has(to)) {
+          plan.skipped.push(from);
+          continue;
+        }
+        v.files.set(to, v.files.get(from) ?? '');
+        v.files.delete(from);
+        refs.set(from, to);
+        plan.paths[from] = to;
+        plan.moved++;
+        changed(id, [from, to], [to]);
+      }
+      const d = daily(v);
+      for (const [k, val] of Object.entries(d))
+        if (typeof val === 'string' && refs.has(val)) d[k] = refs.get(val);
+      if (plan.moved > 0) {
+        delete d['templatesFolder'];
+        d['templatesMigratedFrom'] = plan.folder;
+      }
+      d['templatesMigrated'] = true;
+      v.files.set('.clarae/daily.json', JSON.stringify(d, null, 2));
+      return Promise.resolve({ ...plan, done: true });
+    },
+    DeclineMigration: (id: string): Promise<void> => {
+      const v = vaultOf(id);
+      v.files.set(
+        '.clarae/daily.json',
+        JSON.stringify({ ...daily(v), templatesMigrated: true }, null, 2),
       );
+      return Promise.resolve();
     },
     Expand: (id: string, ref: string, title: string): Promise<string> => {
       try {
-        return Promise.resolve(expandMock(readTemplate(vaultOf(id), ref), title));
+        const text = readTemplate(vaultOf(id), ref);
+        // A drawing has no variables: the core returns it as it is.
+        return Promise.resolve(kindOf(ref) === 'drawing' ? text : expandMock(text, title));
       } catch (e) {
         return Promise.reject(e instanceof Error ? e : new Error(String(e)));
       }

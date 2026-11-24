@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import { api } from '../app/api';
 import { attachmentDir } from '../settings/locations';
+import { isConfigPath } from '../platform/vaultPaths';
 import { pickKnown, type EditorSettings } from '../state/settings';
 import { useAppStore } from '../state/store';
 
@@ -124,8 +125,10 @@ export function drawingName(s: Pick<DrawingSettings, 'nameFormat'>, now: Date): 
 export function drawingDir(
   s: Pick<DrawingSettings, 'creationLocation' | 'creationFolder'>,
   editor: Pick<EditorSettings, 'attachmentLocation' | 'attachmentsFolder'>,
-  activePath: string | null,
+  active: string | null,
 ): string {
+  // A template open in a tab is in the configuration folder: nothing is created next to it.
+  const activePath = active && isConfigPath(active) ? null : active;
   switch (s.creationLocation) {
     case 'folder':
       return s.creationFolder.replace(/^\/+|\/+$/g, '');

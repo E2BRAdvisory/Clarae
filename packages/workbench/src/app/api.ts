@@ -137,8 +137,15 @@ export type MountState = Omit<Plain<sync.MountState>, 'permission' | 'resourceTy
   resourceType: 'vault' | 'folder' | 'file';
 };
 export type ConfigState = Plain<app.ConfigState>;
-export type TemplateInfo = Omit<Plain<app.TemplateInfo>, 'source'> & {
+/** What a template creates: its extension decides (.md, .excalidraw, .marp). */
+export type TemplateKind = 'note' | 'drawing' | 'presentation';
+export type TemplateInfo = Omit<Plain<app.TemplateInfo>, 'source' | 'kind'> & {
   source: 'vault' | 'library';
+  kind: TemplateKind;
+};
+export type TemplateMigration = Omit<Plain<app.TemplateMigration>, 'blocked'> & {
+  /** Why the move cannot run now; '' when it can. */
+  blocked: '' | 'read-only' | 'mount' | 'shared-folder' | 'offline';
 };
 export type NoteResult = Plain<app.NoteResult>;
 export type DailyOptions = Plain<app.DailyOptions>;
@@ -483,9 +490,28 @@ export const api = {
     readSettings: (vaultId: string): Promise<string> => TemplatesAPI.ReadSettings(vaultId),
     writeSettings: (vaultId: string, content: string): Promise<void> =>
       TemplatesAPI.WriteSettings(vaultId, content),
-    /** Templates of the vault folder plus the read-only group library when mounted. */
-    list: (vaultId: string, folder: string): Promise<TemplateInfo[]> =>
-      TemplatesAPI.List(vaultId, folder) as Promise<TemplateInfo[]>,
+    /**
+     * Templates of the vault (the notes, drawings and presentations of the templates folder of its
+     * configuration folder, ADR-0068) plus the read-only group library when mounted.
+     */
+    list: (vaultId: string): Promise<TemplateInfo[]> =>
+      TemplatesAPI.List(vaultId) as Promise<TemplateInfo[]>,
+    /** Adds a template with this content to the vault (a taken name gets a numeric suffix). */
+    create: (
+      vaultId: string,
+      name: string,
+      kind: TemplateKind,
+      content: string,
+    ): Promise<TemplateInfo> =>
+      TemplatesAPI.Create(vaultId, name, kind, content) as Promise<TemplateInfo>,
+    /** What moving the templates of the folder they were in up to 1.8 would move; changes nothing. */
+    migrationPlan: (vaultId: string): Promise<TemplateMigration> =>
+      TemplatesAPI.MigrationPlan(vaultId) as Promise<TemplateMigration>,
+    /** Moves those templates to the templates folder and rewrites the settings that name them. */
+    migrate: (vaultId: string): Promise<TemplateMigration> =>
+      TemplatesAPI.Migrate(vaultId) as Promise<TemplateMigration>,
+    /** Records that the move was offered and declined: it is not offered again. */
+    declineMigration: (vaultId: string): Promise<void> => TemplatesAPI.DeclineMigration(vaultId),
     expand: (vaultId: string, ref: string, title: string, lang: string): Promise<string> =>
       TemplatesAPI.Expand(vaultId, ref, title, lang),
     openDaily: (vaultId: string, o: DailyOptions): Promise<NoteResult> =>

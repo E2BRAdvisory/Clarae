@@ -11,8 +11,17 @@ import { useAppStore } from '../state/store';
 export type MergeSeparator = 'heading' | 'rule' | 'none';
 
 export interface NotesSettings {
-  /** Folder of the templates in the vault. */
+  /**
+   * Up to 1.8: the folder of the vault the templates were in. The templates now live in the
+   * templates folder of the configuration folder (ADR-0068) and nothing here reads this key; it is
+   * kept so that saving the settings does not erase it before the core has moved that folder
+   * (TemplatesAPI.Migrate reads it from the file).
+   */
   templatesFolder: string;
+  /** Written by the core: the move of the templates was made or declined (never offered again). */
+  templatesMigrated: boolean;
+  /** Written by the core: the folder the templates were moved from (old references resolve through it). */
+  templatesMigratedFrom: string;
   dailyFolder: string;
   /** Moment-style format of the daily note name (may contain '/' for sub-folders). */
   dailyFormat: string;
@@ -23,6 +32,10 @@ export interface NotesSettings {
   uniqueTemplate: string;
   /** Template applied to every new note (New note, links to missing notes); "" = empty note. */
   newNoteTemplate: string;
+  /** Template every new drawing starts from ("" = an empty drawing). */
+  newDrawingTemplate: string;
+  /** Template every new presentation starts from ("" = the built-in two slides). */
+  newPresentationTemplate: string;
   /** The "/" menu in the editor. */
   slashCommands: boolean;
   /** Extract selection: replace it with an embed instead of a link. */
@@ -34,6 +47,8 @@ export interface NotesSettings {
 
 export const defaultNotesSettings: NotesSettings = {
   templatesFolder: 'Templates',
+  templatesMigrated: false,
+  templatesMigratedFrom: '',
   dailyFolder: '',
   dailyFormat: 'YYYY-MM-DD',
   dailyTemplate: '',
@@ -41,6 +56,8 @@ export const defaultNotesSettings: NotesSettings = {
   uniqueFormat: 'YYYYMMDDHHmm',
   uniqueTemplate: '',
   newNoteTemplate: '',
+  newDrawingTemplate: '',
+  newPresentationTemplate: '',
   slashCommands: true,
   extractEmbed: false,
   extractFrontmatter: false,

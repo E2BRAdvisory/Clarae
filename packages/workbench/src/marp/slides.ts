@@ -379,6 +379,47 @@ export function deckSlides(source: string, slideLines: readonly number[]): DeckS
   });
 }
 
+/** The slides of a template: its text without the frontmatter and without blank lines at the edges. */
+export function deckBody(template: string): string {
+  const lines = template.replace(/\r\n?/g, '\n').split('\n');
+  const fm = frontmatterEnd(lines);
+  return lines
+    .slice(fm + 1)
+    .join('\n')
+    .replace(/^(\s*\n)+/, '')
+    .trimEnd();
+}
+
+/**
+ * The edit that adds `body` (one or more slides) after slide `index` of the source; none for an
+ * empty body. A presentation that holds nothing yet takes the body as it is. Where slides are told
+ * apart by headings (`headingDivider`) and the body starts with one, no `---` is added: it would
+ * leave an empty slide.
+ */
+export function insertSlidesEdit(
+  source: string,
+  slideLines: readonly number[],
+  index: number,
+  body: string,
+): SourceEdit[] {
+  if (!body.trim()) return [];
+  const lay = layoutOf(source);
+  const fm = frontmatterEnd(lay.lines);
+  if (!lay.lines.slice(fm + 1).some((l) => l.trim())) {
+    const end = source.length;
+    return [
+      { from: end, insert: (source.endsWith('\n') || end === 0 ? '' : '\n') + '\n' + body + '\n' },
+    ];
+  }
+  const bounds = slideBounds(lay, slideLines);
+  const b = bounds[Math.max(0, Math.min(index, bounds.length - 1))];
+  if (!b) return [];
+  let last = b.end;
+  while (last > b.start && !(lay.lines[last] ?? '').trim()) last--;
+  const byHeading = !canReorder(source, slideLines) && /^#{1,6}\s/.test(body);
+  return [{ from: lineEnd(lay, last), insert: (byHeading ? '\n\n' : '\n\n---\n\n') + body }];
+}
+
 /** Slides can be moved when they are told apart by `---` lines (not by `headingDivider`). */
 export function canReorder(source: string, slideLines: readonly number[]): boolean {
   const { lines } = layoutOf(source);

@@ -198,6 +198,58 @@ export function textElement(
 }
 
 /**
+ * A copy of a whole scene moved by (dx, dy), every element with a new id and every reference
+ * between the elements kept: groups, frames, bound text, arrows and what they are attached to.
+ * A reference to an element outside `els` is dropped. Used to add the elements of another drawing
+ * (a template) to a scene: new ids keep two applications of the same template apart, and the merge
+ * by id sound. The order is kept.
+ */
+export function cloneScene(
+  els: readonly SceneElement[],
+  dx: number,
+  dy: number,
+  now: number = Date.now(),
+): SceneElement[] {
+  const ids = new Map<string, string>(els.map((e) => [e.id, newId()]));
+  const groups = new Map<string, string>();
+  const ref = (v: unknown): string | null => (typeof v === 'string' ? (ids.get(v) ?? null) : null);
+  const binding = (v: unknown): unknown => {
+    if (typeof v !== 'object' || v === null) return null;
+    const to = ref((v as { elementId?: unknown }).elementId);
+    return to ? { ...v, elementId: to } : null;
+  };
+  return els.map((e) => {
+    const out: SceneElement = {
+      ...e,
+      id: ids.get(e.id) as string,
+      x: (Number(e.x) || 0) + dx,
+      y: (Number(e.y) || 0) + dy,
+      groupIds: (Array.isArray(e.groupIds) ? (e.groupIds as string[]) : []).map((g) => {
+        if (!groups.has(g)) groups.set(g, newId());
+        return groups.get(g) as string;
+      }),
+      frameId: ref(e.frameId),
+      boundElements: Array.isArray(e.boundElements)
+        ? (e.boundElements as { id: string; type: string }[])
+            .filter((b) => ids.has(b.id))
+            .map((b) => ({ ...b, id: ids.get(b.id) as string }))
+        : null,
+      version: 1,
+      versionNonce: newNonce(),
+      seed: Math.floor(Math.random() * 2 ** 31),
+      index: null,
+      isDeleted: false,
+      updated: now,
+    };
+    delete out['boundElementIds']; // the form of old files: boundElements says the same
+    if ('containerId' in e) out['containerId'] = ref(e.containerId);
+    if ('startBinding' in e) out['startBinding'] = binding(e.startBinding);
+    if ('endBinding' in e) out['endBinding'] = binding(e.endBinding);
+    return out;
+  });
+}
+
+/**
  * Copies of `els` moved by (dx, dy), with new ids. Containers and their bound text are copied
  * together and re-linked; groups are copied as new groups; arrows and bindings are dropped (a copy
  * must not steal the original's attachments).

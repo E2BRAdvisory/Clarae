@@ -240,7 +240,7 @@
     "section_drawing": "Drawings",
     "daily": {
       "templates": "Templates",
-      "templatesFolder": "Template folder",
+      "templatesWhere": "The templates of notes, drawings and presentations live in the configuration folder of the vault:",
       "variablesHelp": "Formats use Moment tokens (YYYY, MM, DD, dddd, HH, mm, ...); unknown variables are left as they are.",
       "daily": "Daily notes",
       "folder": "Folder",
@@ -257,7 +257,12 @@
       "extractEmbed": "Replace the extracted selection with an embed (instead of a link)",
       "extractFrontmatter": "Copy the properties to the extracted note",
       "editor": "Editor",
-      "slash": "Slash commands (\"/\" menu)"
+      "slash": "Slash commands (\"/\" menu)",
+      "newDrawingTemplate": "Template for every new drawing",
+      "newPresentationTemplate": "Template for every new presentation",
+      "openTemplate": "Open",
+      "deleteTemplate": "Delete template",
+      "noTemplates": "This vault has no templates yet."
     },
     "pagePreview": "Page preview when hovering a link",
     "pagePreviewAlways": "Show the preview without holding Cmd/Ctrl",
@@ -582,7 +587,7 @@
     "daily_previous": "Open previous daily note",
     "daily_next": "Open next daily note",
     "unique_new": "New unique note",
-    "template_insert": "Insert template",
+    "template_insert": "Apply template",
     "template_new_from": "New note from template",
     "composer_merge": "Merge current note into another note",
     "composer_extract": "Extract selection to a new note",
@@ -638,7 +643,13 @@
     "terminal_new_tab": "Terminal: new tab",
     "terminal_close_tab": "Terminal: close the tab",
     "terminal_undock": "Terminal: undock into its own window",
-    "terminal_dock": "Terminal: dock back into Clarae"
+    "terminal_dock": "Terminal: dock back into Clarae",
+    "template_new_drawing_from": "New drawing from template",
+    "template_new_presentation_from": "New presentation from template",
+    "template_new": "New template",
+    "template_save_as": "Save as template",
+    "template_edit": "Edit template",
+    "template_import_folder": "Import templates from the folder…"
   },
   "sync": {
     "title": "Sync",
@@ -1200,9 +1211,31 @@
   "templates": {
     "title": "Templates",
     "pick": "Choose a template",
-    "none": "No templates found in the \"{{folder}}\" folder.",
+    "none": "This vault has no templates of this kind yet.",
     "newName": "Name of the new note",
-    "library": "library"
+    "library": "library",
+    "kindPick": "What does the template create?",
+    "kind_note": "Note",
+    "kind_drawing": "Drawing",
+    "kind_presentation": "Presentation",
+    "templateName": "Name of the template",
+    "saved": "Template \"{{name}}\" saved.",
+    "emptyDrawing": "The template holds no elements to add.",
+    "migration": {
+      "title": "Templates of the vault",
+      "move": "Move",
+      "ask_one": "There is {{count}} template in \"{{folder}}\". Templates now live in the .clarae/templates folder of the vault: move it there? It will no longer show among the notes, and links to it will stop resolving.",
+      "ask_other": "There are {{count}} templates in \"{{folder}}\". Templates now live in the .clarae/templates folder of the vault: move them there? They will no longer show among the notes, and links to them will stop resolving.",
+      "askImport": "Move the notes, drawings and presentations of the old templates folder to .clarae/templates? They will no longer show among the notes, and links to them will stop resolving.",
+      "moved_one": "{{count}} template moved.",
+      "moved_other": "{{count}} templates moved.",
+      "skipped": "Left where they are, because a template of the same name exists: {{list}}",
+      "nothing": "No templates to move in \"{{folder}}\".",
+      "blocked_read_only": "This vault is read-only: the templates stay where they are.",
+      "blocked_mount": "This folder is shared with you: its templates stay where they are.",
+      "blocked_shared_folder": "The templates folder is shared with others: moving it would take the files away from them. The templates stay where they are and keep working.",
+      "blocked_offline": "The shares of the vault could not be read: try again when you are online."
+    }
   },
   "composer": {
     "mergeTitle": "Merge note",
@@ -1234,7 +1267,7 @@
     "wikilink": "Internal link",
     "embed": "Embed",
     "drawing": "Drawing",
-    "template": "Insert template",
+    "template": "Apply template",
     "date": "Today's date",
     "group": {
       "text": "Text",

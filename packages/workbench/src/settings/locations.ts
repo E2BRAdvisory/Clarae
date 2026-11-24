@@ -1,5 +1,6 @@
 // Where new notes and pasted attachments go, given the location modes of the
 // Files & links settings (pure, so the rules are tested without the UI).
+import { isConfigPath } from '../platform/vaultPaths';
 import type { EditorSettings } from '../state/settings';
 
 export type NoteLocation = 'folder' | 'current';
@@ -9,7 +10,9 @@ const trimSlashes = (s: string): string => s.replace(/^\/+|\/+$/g, '');
 
 /** Folder of a vault path ('' = vault root). */
 export function folderOf(path: string | null | undefined): string {
-  if (!path || !path.includes('/')) return '';
+  // A template open in a tab lives in the configuration folder: what is created "next to the
+  // active file" goes to the vault root, never among the settings.
+  if (!path || !path.includes('/') || isConfigPath(path)) return '';
   return path.slice(0, path.lastIndexOf('/'));
 }
 

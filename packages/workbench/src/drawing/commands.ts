@@ -10,6 +10,7 @@ import { useSettings } from '../state/settings';
 import { embedMarkdown, EMPTY_DRAWING } from './scene';
 import { drawingDir, drawingName, useDrawingSettings } from './settings';
 import { displayPath } from '../embeds/media';
+import { templateText } from '../daily/templateContent';
 
 /** Inserts text at the cursor of the note being edited; false when no editor is open. */
 export function insertIntoActiveNote(text: string): boolean {
@@ -25,7 +26,7 @@ export function insertIntoActiveNote(text: string): boolean {
  * otherwise),
  * embeds it in the note when one is being edited, and opens it in a new tab.
  */
-export async function newDrawing(opts: { dir?: string } = {}): Promise<string> {
+export async function newDrawing(opts: { dir?: string; template?: string } = {}): Promise<string> {
   const { vault, layout } = useAppStore.getState();
   if (!vault) throw new Error('no vault is open');
   const tab = activeTab(layout);
@@ -33,7 +34,9 @@ export async function newDrawing(opts: { dir?: string } = {}): Promise<string> {
   const dir = opts.dir ?? drawingDir(cfg, useSettings.getState().editor, tab ? tab.path : null);
   const tree = await api.vault.listTree(vault.id);
   const path = uniqueName(tree, dir, drawingName(cfg, new Date()), '.excalidraw');
-  await api.vault.writeNote(vault.id, path, EMPTY_DRAWING, '');
+  // The template asked for, else the one of the settings, else an empty drawing.
+  const content = (await templateText(vault.id, 'drawing', '', opts.template)) ?? EMPTY_DRAWING;
+  await api.vault.writeNote(vault.id, path, content, '');
   invalidateVault(vault.id);
   if (opts.dir === undefined && tab && tab.mode !== 'reading')
     insertIntoActiveNote(embedMarkdown(path, cfg.embedWidth));

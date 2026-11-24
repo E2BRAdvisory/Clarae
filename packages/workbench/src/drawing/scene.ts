@@ -1,5 +1,6 @@
 // Pure helpers for Excalidraw files (.excalidraw is plain JSON). Nothing here imports
 // Excalidraw itself, so the helpers are cheap to load and easy to test.
+import { isConfigPath } from '../platform/vaultPaths';
 import { normalizeFileExtra } from './meta';
 
 /**
@@ -164,6 +165,8 @@ export function exportFileName(path: string, format: 'png' | 'svg', scale: numbe
 }
 
 export function folderOf(path: string): string {
+  // Nothing is created next to a file of the configuration folder (a template open in a tab).
+  if (isConfigPath(path)) return '';
   return path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
 }
 

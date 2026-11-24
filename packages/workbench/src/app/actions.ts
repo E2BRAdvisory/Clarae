@@ -8,7 +8,7 @@ import { useNotesSettings } from '../daily/settings';
 import { queryClient } from '../state/queryClient';
 import { queryKeys } from '../state/queries';
 import { useSettings } from '../state/settings';
-import { newNoteDir } from '../settings/locations';
+import { newNoteDir, folderOf } from '../settings/locations';
 import { selectActivePath, useAppStore } from '../state/store';
 import { saveWorkspaceNow } from '../shell/useVaultSession';
 import { dialog } from '../ui/dialogs';
@@ -258,7 +258,8 @@ export async function openOrCreate(
 ): Promise<void> {
   if (await followLink(from, spec, newTab)) return;
   if (!spec.target) return;
-  const dir = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '';
+  // Next to the note the link is in; never next to a template open in a tab (folderOf).
+  const dir = folderOf(from);
   try {
     await createNote({
       dir: useSettings.getState().editor.newNoteFolder || dir,

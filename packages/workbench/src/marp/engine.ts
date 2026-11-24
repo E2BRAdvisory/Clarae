@@ -94,6 +94,13 @@ export function embedsToImages(source: string): string {
   );
 }
 
+/** The 0-based line each slide of a source starts at (no pictures are resolved). */
+export function slideLinesOf(source: string): number[] {
+  const m = engine();
+  m.render(embedsToImages(source));
+  return m.slideLines();
+}
+
 /** The marker comment that leaves a slide out of the presentation and its exports. */
 export const HIDDEN_COMMENT = HIDDEN_RE;
 

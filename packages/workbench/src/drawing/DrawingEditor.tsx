@@ -1,6 +1,7 @@
 // The Excalidraw editor tab (M3-WP1). Loaded lazily by DrawingView: it pulls in the whole
 // Excalidraw bundle. The file is saved whole 2 s after the last real edit, with the hash of
 // the last read as write precondition (same conflict handling as notes).
+import { isConfigPath } from '../platform/vaultPaths';
 import '@excalidraw/excalidraw/index.css';
 import * as ExcalidrawLib from '@excalidraw/excalidraw';
 import { excalidrawLang } from './lang';
@@ -968,7 +969,8 @@ export default function DrawingEditor({ vaultId, path }: Props) {
   }, [doc.save]);
   /** Hands the scene as it is now to the exporter, when it was edited since the last time. */
   const queueAutoExport = useCallback(() => {
-    if (!dirtySinceExport.current || locked) return;
+    // The template of a drawing gets no picture next to it, among the settings of the vault.
+    if (!dirtySinceExport.current || locked || isConfigPath(path)) return;
     dirtySinceExport.current = false;
     const cfg = useDrawingSettings.getState().settings;
     // A drawing can override the vault's auto-export choice (stored in the file itself).
@@ -986,7 +988,7 @@ export default function DrawingEditor({ vaultId, path }: Props) {
     // What the files would show: the scene, and which files in which themes.
     const key = `${signature.current}|${mode}|${cfg.autoExportTheme}`;
     autoExport.current?.saved(key, { input, plan, base: defaultExportOptions(cfg) });
-  }, [locked, exportInput]);
+  }, [locked, exportInput, path]);
   const queueRef = useRef(queueAutoExport);
   useEffect(() => {
     queueRef.current = queueAutoExport;
