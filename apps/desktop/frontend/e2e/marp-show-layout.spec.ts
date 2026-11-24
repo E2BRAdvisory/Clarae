@@ -10,6 +10,41 @@ const DECK = '---\nmarp: true\ntheme: gaia\npaginate: true\n---\n\n# Kick-off\n\
 
 const TOLERANCE = 2;
 
+test('the thumbnails of the Slideshow tab show the whole slide, scaled to the card', async ({
+  page,
+}) => {
+  await openVault(page, { 'Kickoff.marp': DECK });
+  await page.locator('.tree .node', { hasText: 'Kickoff' }).click();
+  await expect(page.locator('.note-view .cm-content')).toContainText('# Kick-off');
+  await page.getByRole('button', { name: 'Toggle right sidebar' }).click();
+  await page.getByRole('tab', { name: 'Slides' }).click();
+  const thumbs = page.locator('.marp-slides-panel .slide-thumb');
+  await expect(thumbs).toHaveCount(2);
+  for (const thumb of await thumbs.all()) {
+    const section = thumb.locator('section');
+    await expect(section).toBeAttached();
+    // The section covers the card exactly (WebKit would leave it in a corner at 1280x720).
+    await expect
+      .poll(async () => {
+        const [s, c] = await Promise.all([
+          section.evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect),
+          thumb
+            .locator('div.frame')
+            .evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect),
+        ]);
+        return (
+          c.width > 0 &&
+          Math.abs(s.width - c.width) <= TOLERANCE &&
+          Math.abs(s.height - c.height) <= TOLERANCE &&
+          Math.abs(s.x - c.x) <= TOLERANCE &&
+          Math.abs(s.y - c.y) <= TOLERANCE
+        );
+      })
+      .toBe(true);
+    expect(await section.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+  }
+});
+
 for (const { zoom, ...size } of [
   { width: 1000, height: 800, zoom: 1 }, // wider than tall: the slide touches the sides, bars above and below
   { width: 1600, height: 600, zoom: 1 }, // the other way round: the slide touches top and bottom

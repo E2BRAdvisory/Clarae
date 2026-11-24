@@ -753,7 +753,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/live-frame.spec.ts` | 8 | yes | yes | — |
 | `apps/desktop/frontend/e2e/live-input.spec.ts` | 19 | yes | yes | — |
 | `apps/desktop/frontend/e2e/live-views.spec.ts` | 6 | yes | yes | — |
-| `apps/desktop/frontend/e2e/marp-show-layout.spec.ts` | 1 | yes | yes | — |
+| `apps/desktop/frontend/e2e/marp-show-layout.spec.ts` | 2 | yes | yes | — |
 | `apps/desktop/frontend/e2e/marp.spec.ts` | 8 | yes | yes | — |
 | `apps/desktop/frontend/e2e/open-by-type.spec.ts` | 3 | yes | yes | — |
 | `apps/desktop/frontend/e2e/presence.spec.ts` | 8 | yes | yes | — |

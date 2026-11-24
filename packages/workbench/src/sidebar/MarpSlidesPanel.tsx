@@ -13,8 +13,7 @@ import { previewAssets } from '../marp/assets';
 import { exportDeckPdf } from '../marp/commands';
 import { applyEdit, goToSlide, type EditResult } from '../marp/controller';
 import { useMarpDeck } from '../marp/deckStore';
-import { THUMB_CSS } from '../marp/document';
-import { fitSlides } from '../marp/polyfill';
+import { fitSlide, slideSize, THUMB_CSS } from '../marp/document';
 import type { Deck } from '../marp/engine';
 import { useMarpShow } from '../marp/showStore';
 import {
@@ -80,7 +79,11 @@ function useRenderedDeck(vaultId: string, path: string, source: string): Rendere
   return rendered?.path === path ? rendered : null;
 }
 
-/** The thumbnail of a slide: its `<svg>` in a shadow root with the theme (nothing else sees it). */
+/**
+ * The thumbnail of a slide: its `<svg>` in a shadow root with the theme (nothing else sees it), at
+ * its natural size and scaled to the card by a transform, which WebKit honours (unlike an `<svg>`
+ * stretched to the card, which leaves the slide in a corner there).
+ */
 function Thumb({ svg, css }: { svg: string; css: string }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -89,12 +92,22 @@ function Thumb({ svg, css }: { svg: string; css: string }) {
     const root = el.shadowRoot ?? el.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = `${css}\n${THUMB_CSS}`;
+    const frame = document.createElement('div');
+    frame.className = 'frame'; // in the shadow root: the cards' own DOM keeps no inline style
     const body = document.createElement('div');
     body.className = 'marpit';
     body.innerHTML = svg; // sanitized by renderDeck
-    root.replaceChildren(style, body);
-    // Where WebKit leaves the text of a slide in the corner at its natural size, Marp's polyfill fixes it.
-    return fitSlides(el, root);
+    frame.append(body);
+    root.replaceChildren(style, frame);
+    const slide = body.firstElementChild;
+    if (!(slide instanceof SVGSVGElement)) return;
+    const size = slideSize(slide);
+    frame.style.aspectRatio = `${size.width} / ${size.height}`; // the card follows the slide (4:3, 16:9…)
+    const fit = (): void => fitSlide(body, slide, frame.clientWidth, frame.clientHeight);
+    fit();
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+    resize?.observe(frame);
+    return () => resize?.disconnect();
   }, [svg, css]);
   return <div ref={host} className="slide-thumb" />;
 }

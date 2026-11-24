@@ -1,17 +1,22 @@
 // The application's own CSS around Marp's slides (the slides themselves are styled by the theme):
 // the thumbnails and the full-screen presentation, the print layer of "Export to PDF" and the standalone HTML document.
 
-/** Layout of a slide thumbnail (inside its shadow root): the slide fills the width of the card. */
+/**
+ * Layout of a slide thumbnail (inside its shadow root): `div.frame` takes the proportions of the
+ * slide (set by the panel from its viewBox) and the slide, at its natural size, is scaled to it by
+ * `fitSlide`, as in the presentation (see SHOW_CSS for why not by stretching the `<svg>`).
+ */
 export const THUMB_CSS = `
 :host { display: block; }
-div.marpit { margin: 0; padding: 0; }
-div.marpit > svg { display: block; width: 100%; height: auto; }
+div.frame { position: relative; overflow: hidden; aspect-ratio: 16 / 9; }
+div.marpit { position: absolute; left: 0; top: 0; margin: 0; padding: 0; transform-origin: 0 0; }
+div.marpit > svg { display: block; width: 100%; height: 100%; }
 `;
 
 /**
  * Layout of the full-screen presentation (inside its shadow root): only the current slide shows.
  * The slide is laid out at its natural size (the viewBox of its `<svg>`, 1280x720 by default) and
- * `fitShowSlide` scales and centers `div.marpit` with a CSS transform: WebKit (WKWebView, Safari)
+ * `fitSlide` scales and centers `div.marpit` with a CSS transform: WebKit (WKWebView, Safari)
  * does not scale the HTML of a `<foreignObject>` with the viewBox of its `<svg>` (bug 23113), so
  * an `<svg>` stretched to the screen leaves the slide in a corner at its natural size, while a
  * transform on an HTML ancestor scales everything in every engine, without Marp's polyfill.
@@ -33,10 +38,11 @@ export function slideSize(svg: SVGSVGElement): { width: number; height: number }
 }
 
 /**
- * Fits the current slide of the presentation to `width` x `height` (the area of the show): as large
- * as it can be with its proportions, centered, bars on the longer side.
+ * Fits a slide laid out at its natural size to `width` x `height` (the screen of the presentation,
+ * the card of a thumbnail): `marpit`, the parent of its `<svg>`, takes the natural size and a
+ * transform makes it as large as it can be with its proportions, centered, bars on the longer side.
  */
-export function fitShowSlide(
+export function fitSlide(
   marpit: HTMLElement,
   svg: SVGSVGElement,
   width: number,

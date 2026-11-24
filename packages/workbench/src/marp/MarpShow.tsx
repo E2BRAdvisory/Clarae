@@ -11,7 +11,7 @@ import { importWithRetry } from '../ui/lazyView';
 import { enterFullscreen, leaveFullscreen } from '../util/fullscreen';
 import { previewAssets } from './assets';
 import { deckSource } from './commands';
-import { fitShowSlide, SHOW_CSS } from './document';
+import { fitSlide, SHOW_CSS } from './document';
 import type { Deck } from './engine';
 import { useMarpShow } from './showStore';
 import { deckSettings, deckSlides, displayNote, renumberPages } from './slides';
@@ -89,8 +89,8 @@ function Running({ vaultId, path, from }: { vaultId: string; path: string; from:
     renumberPages(body, model.deck.hidden, model.deck.advances); // the slides left out leave no gap in the page numbers
     shadow.replaceChildren(style, body);
   }, [model]);
-  // The current slide, at its natural size, scaled to the screen by a transform (SHOW_CSS): this
-  // works in WebKit too, where stretching the <svg> would leave the slide in a corner.
+  // The current slide, at its natural size, scaled to the screen by a transform (SHOW_CSS, fitSlide):
+  // this works in WebKit too, where stretching the <svg> would leave the slide in a corner.
   useLayoutEffect(() => {
     const el = host.current;
     const marpit = el?.shadowRoot?.querySelector<HTMLElement>('div.marpit');
@@ -99,7 +99,7 @@ function Running({ vaultId, path, from }: { vaultId: string; path: string; from:
     svgs.forEach((s, i) => s.classList.toggle('current', i === slide));
     const current = svgs[slide];
     if (!current) return;
-    const fit = (): void => fitShowSlide(marpit, current, el.clientWidth, el.clientHeight);
+    const fit = (): void => fitSlide(marpit, current, el.clientWidth, el.clientHeight);
     fit();
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
     resize?.observe(el);
