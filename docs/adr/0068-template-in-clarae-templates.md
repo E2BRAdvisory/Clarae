@@ -1,0 +1,44 @@
+# ADR-0068 — Template nella cartella di configurazione del vault, per note, disegni e presentazioni (M31)
+
+|                       |                                                                                                                                                                                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | proposta                                                                                                                                                                                                                                                                                                                                |
+| **Data**              | 2026-11-24                                                                                                                                                                                                                                                                                                                              |
+| **Riferimenti spec**  | §2.1.2 (D-06); §2.2.1 (riga `templates`); §2.6.6 (libreria di template di gruppo); §3.4.5 (strategie di merge); §3.4.6 (scope di sync di `.clarae/`); §3.4.7 (mount); D-04; ADR-0015; ADR-0047; ADR-0052; ADR-0054; ADR-0063                                                                                                            |
+| **Devia dallo spec?** | **sì:** §2.2.1 e ADR-0015 (i template erano note di una cartella del vault configurabile); §3.4.5 e §3.4.6 (i file di `.clarae/templates/` non seguono la risoluzione dei config JSON); §2.6.6 (la libreria di gruppo offre anche disegni e presentazioni). Le righe da aggiornare nello spec, a cura dell'owner, sono in «Conseguenze» |
+| **Superfici**         | desktop e workbench web (stesso core Go, desktop e WASM; prove: test Go di `shared/go` e di `apps/desktop/internal`, e2e di sync `e2e_templates_test.go`, vitest, `e2e/templates.spec.ts` su Chromium; voce `templates` del registro di parità, sul workbench ancora `partial`); cloud e console: nessun cambiamento                    |
+
+## Contesto
+
+Richiesta dell'owner del 2026-11-24, con schizzo: la posizione dei template deve essere **fissa**, dentro `.clarae` del vault; nelle Impostazioni si sceglie un template di default per note, disegni e presentazioni Marp; accanto a «Nuova nota da template» servono «Nuovo disegno da template» e «Nuova presentazione da template»; un comando «Applica template» aggiunge un template al file aperto.
+
+Stato di partenza (ADR-0015): i template erano note `.md` di una cartella del vault configurabile (`templatesFolder`, default `Templates`), quindi comparivano in ricerca, grafo e selettore rapido, e valevano solo per le note. Lo spec §3.4.6 elencava già `.clarae/templates/` tra i contenuti sincronizzati per utente, ma nessun codice la usava.
+
+## Decisione
+
+1. **Posizione.** I template del vault stanno in `.clarae/templates/` (sottocartelle ammesse). Il tipo viene dall'estensione: `.md` nota, `.excalidraw` disegno, `.marp` presentazione. La cartella non è configurabile. Il core non costruisce il percorso: lo chiede a `vault.FS` (`WalkConfig`, `ReadConfig`, `WriteConfig`, `AdoptConfig`), che copre anche il nome 1.x della cartella di configurazione (ADR-0052).
+2. **Riferimenti.** Un riferimento resta un path: canonico `.clarae/templates/<rel>` per il vault, `library:<path>` per la libreria di gruppo. I riferimenti scritti fino alla 1.8 e quelli gestiti dall'amministratore (`daily_notes.template`) continuano a risolversi; dopo lo spostamento della vecchia cartella, un riferimento verso di essa che non trova il file viene letto dalla nuova posizione (`templatesMigratedFrom` in `daily.json`).
+3. **Indice.** I template non sono indicizzati: niente ricerca, link, backlink, grafo, selettore rapido. `files.kind` resta `config`, sul client e sul server.
+4. **Merge.** Un file sotto `.clarae/templates/` è fuso secondo il suo contenuto e non come impostazione JSON: `.md` e `.marp` a tre vie, `.excalidraw` per id (stesso autore), altrimenti come un file equivalente fuori dalla cartella (`merge.DecideByPath`, usato dalla sync e da `VaultAPI.MergeEdit`). Il server non cambia. I template hanno lo storico locale.
+5. **Variabili.** `{{date}}`, `{{time}}`, `{{title}}` si espandono in note e presentazioni; un disegno è copiato così com'è.
+6. **Default.** `newNoteTemplate`, `newDrawingTemplate`, `newPresentationTemplate` in `daily.json`. Un template mancante o non valido non blocca mai una creazione: si ricade sul contenuto predefinito.
+7. **Comandi.** «Nuova nota / Nuovo disegno / Nuova presentazione da template»; «Applica template» (id `template:insert`, sensibile al contesto: nota al cursore, disegno al centro della vista con id nuovi e riferimenti conservati, presentazione come slide dopo quella del cursore, senza il frontmatter del template); «Nuovo template», «Salva come template», «Modifica template», «Importa template dalla cartella…». Un template si apre in una scheda come ogni file; da lì non si creano file «accanto» e un disegno non genera esportazioni automatiche.
+8. **Libreria di gruppo.** Offre note, disegni e presentazioni del mount, in sola lettura.
+9. **Mount.** In una cartella condivisa con l'utente non si creano template e non si migra: la sua `.clarae/` è una cartella della condivisione e ciò che vi si scrive arriva al proprietario e agli altri destinatari come contenuto ordinario (provato da `TestSettingsFolderOfAMountIsContentOfTheShare`). Elenco e lettura restano.
+10. **Migrazione.** All'apertura di un vault con template nella vecchia cartella l'app chiede, una volta, se spostarli; il rifiuto è registrato (`templatesMigrated`). Lo spostamento è una `move` dello stesso file per la sync, non sovrascrive nulla, riscrive i riferimenti in `daily.json` e lascia gli altri file della cartella. È bloccata su vault in sola lettura, sui mount, quando la cartella è, contiene o sta dentro una condivisione in uscita (`SHARE_ROOT_MOVE`, e i destinatari perderebbero i file) e quando le condivisioni non si possono leggere. Se non c'è nulla da spostare non si scrive nulla.
+
+## Alternative considerate
+
+- **Cartella del vault configurabile (stato precedente)** — i template restano tra le note e la posizione non è prevedibile; è ciò che la richiesta supera.
+- **Cambiare `KindOf` per i file dei template** — `files.kind` divergerebbe tra client vecchi, nuovi e server, e l'indice analizzerebbe i template. Cambia solo la scelta della strategia di merge sul client.
+- **Migrazione automatica e silenziosa** — sposta file visibili dell'utente e rompe i wikilink verso di essi senza avviso; fallirebbe sulle cartelle condivise.
+- **Tre comandi «Applica template» distinti** — più voci nella palette e scorciatoie esistenti perse; un comando sceglie dal tipo del file in primo piano.
+
+## Conseguenze
+
+- **Template non più condivisibili come cartella del vault**: `.clarae/` vale solo alla radice. Per un gruppo resta la libreria di gruppo; una cartella `Templates` già condivisa non viene migrata e continua a funzionare tramite i vecchi riferimenti.
+- **Dispositivi non aggiornati**: ricevono gli spostamenti; i riferimenti riscritti si leggono ancora; i loro selettori restano vuoti; una modifica concorrente a un template produce lì una copia di conflitto, mai una perdita. Salvando le impostazioni possono togliere da `daily.json` le chiavi nuove.
+- **Copie di conflitto** dei template restano nell'elenco, perché in una cartella nascosta non si vedrebbero altrimenti.
+- **Template aperto in scheda**: senza outline, backlink e proprietà (non è indicizzato).
+- **Debito**: la voce di parità resta `partial` (nessuna prova sul core WASM); la scheda di un template non segue il file quando passa tra il nome 1.x e quello corrente della cartella di configurazione; l'elenco nelle Impostazioni si aggiorna solo all'apertura della sezione; le impostazioni di un mount viaggiano già oggi nella condivisione (comportamento precedente, da decidere a parte).
+- **Da riportare in `Specifications.md`** (a cura dell'owner): §2.2.1, riga `templates` (posizione fissa, tre tipi, default, comandi, migrazione); §2.6.6 (libreria: anche disegni e presentazioni); §3.4.5 (strategia per contenuto dei file di `.clarae/templates/`); §3.4.6 (`templates/` su una riga propria: non segue la risoluzione dei config JSON; nuove chiavi di `daily.json`); §3.4.7 (nessun template proprio nei mount).

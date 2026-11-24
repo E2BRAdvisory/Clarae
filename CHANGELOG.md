@@ -6,6 +6,18 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+Milestone M31 ([roadmap](docs/roadmap.md) §13-quatervicies), [ADR-0068](docs/adr/0068-template-in-clarae-templates.md) (proposta): **i template stanno nella cartella `.clarae/templates` del vault e valgono per note, disegni e presentazioni**. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
+
+### Client desktop e workbench
+
+- **Posizione fissa dei template**: `.clarae/templates` del vault, con il tipo dall'estensione (`.md`, `.excalidraw`, `.marp`). L'impostazione «Cartella dei template» non c'è più. I template non compaiono più in ricerca, grafo e selettore rapido.
+- **Template di default** in Impostazioni › Note giornaliere e template: per ogni nuova nota, ogni nuovo disegno e ogni nuova presentazione, con l'elenco dei template del vault (Apri, Elimina, Nuovo template).
+- **Nuovi comandi**: «Nuovo disegno da template», «Nuova presentazione da template», «Nuovo template», «Salva come template», «Modifica template», «Importa template dalla cartella…».
+- **«Applica template»** prende il posto di «Inserisci template» (stesso comando, le scorciatoie restano): in una nota inserisce al cursore, in un disegno aggiunge gli elementi al centro della vista, in una presentazione aggiunge le slide dopo quella corrente.
+- **Template esistenti**: all'apertura di un vault con template nella vecchia cartella l'app chiede una volta se spostarli; i riferimenti nelle impostazioni vengono aggiornati e quelli vecchi continuano a funzionare. Lo spostamento non avviene sui vault in sola lettura, sulle cartelle condivise con voi e quando la cartella dei template è condivisa con altri.
+- **Sincronizzazione**: un template modificato su due dispositivi viene fuso come la nota o il disegno che è, senza copia di conflitto. I dispositivi non ancora aggiornati non elencano i template spostati e, su una modifica concorrente, producono una copia di conflitto.
+- **Cartelle condivise con voi**: non vi si creano template propri; per un gruppo resta la libreria di template, che ora offre anche disegni e presentazioni.
+
 ## [1.8.6] - 2026-11-24
 
 Milestone M30 ([roadmap](docs/roadmap.md) §13-tervicies), sessioni M30-S1…S4: **la presentazione di un `.marp` e le miniature della scheda Slideshow riempiono davvero il loro spazio anche nell'app desktop su macOS**. La 1.8.5 aveva tolto l'effetto dello zoom dell'interfaccia, ma nella WKWebView reale la slide restava alla sua dimensione naturale (1280×720) nell'angolo in alto a sinistra. Nessuna migrazione del database, nessun cambiamento dei formati né del protocollo.
