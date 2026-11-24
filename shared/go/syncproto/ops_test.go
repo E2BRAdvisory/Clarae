@@ -99,6 +99,30 @@ func TestKindOf(t *testing.T) {
 	}
 }
 
+// ContentKindOf looks at the extension only: it is KindOf outside the configuration folder, and
+// inside it says what a file holds.
+func TestContentKindOf(t *testing.T) {
+	for p, want := range map[string]FileKind{
+		"a.md":                              KindMarkdown,
+		"d.excalidraw":                      KindExcalidraw,
+		".clarae/templates/daily.md":        KindMarkdown,
+		".clarae/templates/Deck.marp":       KindMarkdown,
+		".clarae/templates/b/Bd.excalidraw": KindExcalidraw,
+		".clarae/templates/logo.png":        KindAttachment,
+		".clarae/editor.json":               KindOther,
+		pathrules.LegacyConfigDirs[0] + "/templates/daily.md": KindMarkdown,
+	} {
+		if got := ContentKindOf(p); got != want {
+			t.Errorf("ContentKindOf(%q) = %s want %s", p, got, want)
+		}
+	}
+	for _, p := range []string{"a.md", "Talks/Deck.marp", "map.canvas", "db.base", "img/x.png", "README"} {
+		if ContentKindOf(p) != KindOf(p) {
+			t.Errorf("ContentKindOf(%q) differs from KindOf outside the configuration folder", p)
+		}
+	}
+}
+
 func TestHTTPStatus(t *testing.T) {
 	tests := map[Code]int{
 		CodeUnauthenticated:    http.StatusUnauthorized,

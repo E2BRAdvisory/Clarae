@@ -127,10 +127,16 @@ func TestSkipsBinaryLargeAndExcluded(t *testing.T) {
 	if _, _, err := h.Take("big.md", ReasonPeriodic); !errors.Is(err, ErrSkipped) {
 		t.Fatalf("large: %v", err)
 	}
-	for _, p := range []string{".clarae/editor.json", ".clarae/snapshots/meta/x/1.json", ".trash/a.md", "x.tmp", ".DS_Store"} {
+	for _, p := range []string{".clarae/editor.json", ".clarae/snapshots/meta/x/1.json", ".clarae/templates.json", ".trash/a.md", "x.tmp", ".DS_Store"} {
 		if _, _, err := h.Take(p, ReasonPeriodic); !errors.Is(err, ErrSkipped) {
 			t.Fatalf("%s: %v", p, err)
 		}
+	}
+	// A template of the vault is user content, although it lives in the configuration folder
+	// (ADR-0068): the sync merges it, so it gets its snapshots.
+	write(t, fsys, ".clarae/templates/Work/Daily.md", "# {{title}}")
+	if _, created, err := h.Take(".clarae/templates/Work/Daily.md", ReasonPeriodic); err != nil || !created {
+		t.Fatalf("a template: created %v, %v", created, err)
 	}
 }
 

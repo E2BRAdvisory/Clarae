@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"clarae/apps/desktop/internal/vault"
+	"clarae/shared/pathrules"
 )
 
 var now = time.Date(2026, time.March, 5, 14, 7, 9, 0, time.UTC)
@@ -168,30 +169,102 @@ func TestList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("Templates/Meeting.md")
-	write("Templates/sub/Book.md")
+	cfg, former := pathrules.ConfigDir, pathrules.LegacyConfigDirs[0]
+	write(cfg + "/templates/Meeting.md")
+	write(cfg + "/templates/sub/Book.md")
+	write(cfg + "/templates/Board.excalidraw")
+	write(cfg + "/templates/Talk.MARP")
+	write(cfg + "/templates/image.png")
+	write(cfg + "/editor.json")
+	write(former + "/templates/Meeting.md") // shadowed by the current folder
+	write(former + "/templates/Old.md")     // a vault shared with a 1.x client (ADR-0052)
+	write("Templates/Legacy.md")
+	write("Templates/sub/Sketch.excalidraw")
 	write("Templates/image.png")
 	write("Other/Note.md")
 	fsys, err := vault.NewFS(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := List(fsys, "", SourceVault, false)
-	if err != nil || len(got) != 2 || got[0].Path != "Templates/Meeting.md" || got[1].Name != "Book" && got[1].Path != "Templates/sub/Book.md" {
-		t.Fatalf("List = %+v, %v", got, err)
+
+	got, err := List(fsys)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got[0].Ref != "Templates/Meeting.md" {
-		t.Errorf("vault ref = %q", got[0].Ref)
+	type row struct{ rel, kind, path, ref string }
+	want := []row{
+		{"Board.excalidraw", KindDrawing, cfg + "/templates/Board.excalidraw", cfg + "/templates/Board.excalidraw"},
+		{"Meeting.md", KindNote, cfg + "/templates/Meeting.md", cfg + "/templates/Meeting.md"},
+		{"Old.md", KindNote, former + "/templates/Old.md", cfg + "/templates/Old.md"}, // the reference never names the former folder
+		{"sub/Book.md", KindNote, cfg + "/templates/sub/Book.md", cfg + "/templates/sub/Book.md"},
+		{"Talk.MARP", KindPresentation, cfg + "/templates/Talk.MARP", cfg + "/templates/Talk.MARP"},
 	}
-	all, _ := List(fsys, "", SourceLibrary, true)
-	if len(all) != 3 || all[0].Ref != "library:Other/Note.md" {
-		t.Fatalf("library list = %+v", all)
+	if len(got) != len(want) {
+		t.Fatalf("List = %+v", got)
 	}
-	none, err := List(fsys, "Missing", SourceVault, false)
-	if err != nil || len(none) != 0 {
-		t.Fatalf("missing folder = %+v, %v", none, err)
+	for i, w := range want {
+		g := got[i]
+		if g.Rel != w.rel || g.Kind != w.kind || g.Path != w.path || g.Ref != w.ref || g.Source != SourceVault {
+			t.Errorf("List[%d] = %+v, want %+v", i, g, w)
+		}
 	}
+	if got[3].Name != "Book" {
+		t.Errorf("name = %q", got[3].Name)
+	}
+
+	// A library is a whole mount: its notes, drawings and presentations, not its settings.
+	all, err := ListLibrary(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var refs []string
+	for _, tp := range all {
+		refs = append(refs, tp.Ref+"|"+tp.Kind)
+	}
+	wantRefs := []string{"library:Other/Note.md|note", "library:Templates/Legacy.md|note", "library:Templates/sub/Sketch.excalidraw|drawing"}
+	if strings.Join(refs, ",") != strings.Join(wantRefs, ",") {
+		t.Fatalf("library list = %v", refs)
+	}
+
+	// The folder the templates were in up to 1.8.
+	folder, files, err := FolderFiles(fsys, "")
+	if err != nil || folder != "Templates" || strings.Join(files, ",") != "Templates/Legacy.md,Templates/sub/Sketch.excalidraw" {
+		t.Fatalf("FolderFiles = %q %v %v", folder, files, err)
+	}
+	if _, files, err := FolderFiles(fsys, "/Other/"); err != nil || len(files) != 1 || files[0] != "Other/Note.md" {
+		t.Fatalf("a named folder = %v %v", files, err)
+	}
+	for _, bad := range []string{"Missing", "../x", cfg, cfg + "/templates", ".trash"} {
+		if _, files, err := FolderFiles(fsys, bad); err != nil || len(files) != 0 {
+			t.Errorf("FolderFiles(%q) = %v, %v", bad, files, err)
+		}
+	}
+
+	empty, err := vault.NewFS(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if none, err := List(empty); err != nil || len(none) != 0 {
+		t.Fatalf("a vault without templates = %+v, %v", none, err)
+	}
+
 	if s, p := ParseRef("library:A/B.md"); s != SourceLibrary || p != "A/B.md" {
 		t.Errorf("ParseRef = %q %q", s, p)
+	}
+	if s, p := ParseRef(VaultRef("A/B.md")); s != SourceVault || p != cfg+"/templates/A/B.md" {
+		t.Errorf("ParseRef of a vault reference = %q %q", s, p)
+	}
+	for p, want := range map[string]string{"a.md": KindNote, "A.MD": KindNote, "b.excalidraw": KindDrawing, "c.marp": KindPresentation, "d.png": "", "e": "", "f.excalidraw.md": KindNote} {
+		if got := KindOfPath(p); got != want {
+			t.Errorf("KindOfPath(%q) = %q, want %q", p, got, want)
+		}
+	}
+	for _, k := range []string{KindNote, KindDrawing, KindPresentation} {
+		if KindOfPath("x"+ExtOfKind(k)) != k {
+			t.Errorf("ExtOfKind(%q) = %q", k, ExtOfKind(k))
+		}
+	}
+	if ExtOfKind("canvas") != "" {
+		t.Error("an unknown kind has no extension")
 	}
 }

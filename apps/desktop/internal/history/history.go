@@ -233,13 +233,15 @@ func (h *History) Observe(paths []string) {
 }
 
 // eligiblePath keeps user content only: not the configuration folder, the trash, temporary or
-// OS files.
+// OS files. The templates of the vault are user content kept in the configuration folder
+// (ADR-0068): the sync merges them like notes, so they get the snapshot taken before it overwrites
+// a file.
 func eligiblePath(p string) bool {
 	n, err := pathrules.Normalize(p)
 	if err != nil || n != p {
 		return false
 	}
-	return !pathrules.IsConfigPath(n) && !pathrules.IsExcluded(n, true)
+	return (!pathrules.IsConfigPath(n) || pathrules.IsTemplatePath(n)) && !pathrules.IsExcluded(n, true)
 }
 
 func (h *History) lastOfLocked(path string) time.Time {

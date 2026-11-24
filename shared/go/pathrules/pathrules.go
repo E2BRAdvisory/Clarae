@@ -297,6 +297,29 @@ func IsShapeLibrary(p string) bool {
 	return ok && name == ShapeLibraryFile
 }
 
+// TemplatesDir is the name, inside the configuration folder, of the folder of the templates of the
+// vault: notes, drawings and presentations a new file starts from (ADR-0068).
+const TemplatesDir = "templates"
+
+// TemplateRel splits a normalized path inside the templates folder, under any name of the
+// configuration folder, from that folder: ".clarae/templates/Work/Daily.md" gives "Work/Daily.md".
+// ok is false for a path outside the folder and for the folder itself.
+func TemplateRel(p string) (rel string, ok bool) {
+	name, ok := ConfigRel(p)
+	if !ok || !HasPrefix(name, TemplatesDir) || len(name) == len(TemplatesDir) {
+		return "", false
+	}
+	return name[len(TemplatesDir)+1:], true
+}
+
+// IsTemplatePath reports whether a normalized path is a file or a folder inside the templates folder
+// of the vault. Such a file is in the configuration folder, so it is neither indexed nor listed with
+// the notes, but its content is a note, a drawing or a presentation: the sync merges it as one.
+func IsTemplatePath(p string) bool {
+	_, ok := TemplateRel(p)
+	return ok
+}
+
 // VCSDirs are the names of the folders of the version control systems (Git, Mercurial, Subversion,
 // Bazaar, Jujutsu). A path with any segment of these names, at any depth and in any case, is never
 // synchronized (ADR-0066): a folder, or the file Git writes in its place for a worktree or a submodule.

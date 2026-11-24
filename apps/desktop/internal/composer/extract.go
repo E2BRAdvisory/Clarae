@@ -96,7 +96,9 @@ func Extract(fsys *vault.FS, o ExtractOptions) (ExtractResult, error) {
 		title = SuggestTitle(o.Selection)
 	}
 	dir := strings.Trim(o.Dir, "/")
-	if dir == "" && strings.Contains(o.SourcePath, "/") {
+	// Next to the source, unless the source is a file of the configuration folder (a template open
+	// in a tab, ADR-0068): a note created there would be a template, hidden from the notes.
+	if dir == "" && strings.Contains(o.SourcePath, "/") && !pathrules.IsConfigPath(o.SourcePath) {
 		dir = path.Dir(o.SourcePath)
 	}
 	// Existing notes decide the free name and whether the short link is ambiguous.

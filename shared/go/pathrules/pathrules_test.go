@@ -398,3 +398,32 @@ func TestIsVCSName(t *testing.T) {
 		}
 	}
 }
+
+func TestTemplateRel(t *testing.T) {
+	tests := []struct {
+		path string
+		rel  string
+		ok   bool
+	}{
+		{".clarae/templates/Daily.md", "Daily.md", true},
+		{".clarae/templates/Work/Board.excalidraw", "Work/Board.excalidraw", true},
+		{legacyDir + "/templates/Deck.marp", "Deck.marp", true}, // folder of 1.x vaults (ADR-0052)
+		{".clarae/templates", "", false},                        // the folder itself
+		{".clarae/templates.md", "", false},
+		{".clarae/templatesX/a.md", "", false},
+		{".clarae/editor.json", "", false},
+		{".clarae/sub/templates/a.md", "", false},
+		{"Notes/.clarae/templates/a.md", "", false}, // only the vault-root .clarae is special
+		{"templates/a.md", "", false},
+		{"Templates/a.md", "", false},
+	}
+	for _, c := range tests {
+		rel, ok := TemplateRel(c.path)
+		if rel != c.rel || ok != c.ok {
+			t.Errorf("TemplateRel(%q) = %q, %v want %q, %v", c.path, rel, ok, c.rel, c.ok)
+		}
+		if IsTemplatePath(c.path) != c.ok {
+			t.Errorf("IsTemplatePath(%q) = %v", c.path, !c.ok)
+		}
+	}
+}

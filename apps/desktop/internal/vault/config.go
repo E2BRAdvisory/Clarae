@@ -421,3 +421,108 @@ func (f *FS) configRoot() (string, error) {
 	}
 	return abs, nil
 }
+
+// WalkConfig visits the files below the folder name of the configuration folder ("templates"), in
+// the current folder and in the former ones (see the comment at the top of this file). rel is the
+// path of a file inside that folder ("Work/Daily.md"), e its entry, whose Path is where the file is
+// in the vault. A file both folders have is reported once, from the current one: the one ReadConfig
+// reads. Folders are not reported, and what Walk leaves out (excluded entries, symlinks) is left
+// out here too. A folder that does not exist holds nothing. fn runs outside the locks, so it may
+// call back into the FS.
+func (f *FS) WalkConfig(name string, fn func(rel string, e Entry) error) error {
+	n, err := configName(name)
+	if err != nil {
+		return err
+	}
+	type found struct {
+		rel string
+		e   Entry
+	}
+	var files []found
+	collect := func() error {
+		f.cfgMu.RLock()
+		defer f.cfgMu.RUnlock()
+		seen := map[string]bool{}
+		for _, dir := range placeDirs(n) {
+			base := dir + "/" + n
+			err := f.WalkDir(base, func(e Entry) error {
+				if e.IsDir {
+					return nil
+				}
+				rel := strings.TrimPrefix(e.Path, base+"/")
+				if key := pathrules.Key(rel); !seen[key] {
+					seen[key] = true
+					files = append(files, found{rel, e})
+				}
+				return nil
+			})
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := collect(); err != nil {
+		return err
+	}
+	for _, x := range files {
+		if err := fn(x.rel, x.e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AdoptConfig moves the file of the vault at fromRel into the configuration folder, under name
+// ("templates/Daily.md"), to the place WriteConfig would create a file of that name at (the former
+// folder while the vault is linked and the move is off), and returns its new path. Nothing is
+// overwritten: ErrExists when either folder already has a file of that name. The source must be a
+// regular file outside the configuration folder, and name one that syncs. The folders left empty
+// behind the file stay: they are the user's.
+func (f *FS) AdoptConfig(fromRel, name string) (toRel string, err error) {
+	n, err := configName(name)
+	if err != nil {
+		return "", err
+	}
+	if localOnly(n) {
+		return "", &pathrules.Error{Path: name, Reason: "a file that never syncs cannot be adopted"}
+	}
+	fromAbs, from, err := f.Resolve(fromRel)
+	if err != nil {
+		return "", err
+	}
+	if pathrules.IsConfigPath(from) {
+		return "", &pathrules.Error{Path: fromRel, Reason: "already inside the configuration folder"}
+	}
+	toRel, err = f.adoptLocked(fromAbs, n, f.configInLegacy())
+	if err != nil {
+		return "", err
+	}
+	f.changed(from, toRel) // outside the locks: the callback may call back into the FS
+	return toRel, nil
+}
+
+func (f *FS) adoptLocked(fromAbs, name string, legacyNew bool) (string, error) {
+	f.cfgMu.Lock()
+	defer f.cfgMu.Unlock()
+	rel, exists, err := f.locateConfig(name, legacyNew)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		return "", ErrExists
+	}
+	toAbs, toRel, err := f.Resolve(rel)
+	if err != nil {
+		return "", err
+	}
+	if st, err := os.Lstat(fromAbs); err != nil {
+		return "", err
+	} else if !st.Mode().IsRegular() {
+		return "", &pathrules.Error{Path: name, Reason: "only a regular file can be adopted"}
+	}
+	if err := f.rename(fromAbs, toAbs); err != nil {
+		return "", err
+	}
+	return toRel, nil
+}

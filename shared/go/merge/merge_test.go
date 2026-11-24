@@ -242,6 +242,47 @@ func TestDecideByPathGivesTheShapeLibraryItsOwnStrategy(t *testing.T) {
 	}
 }
 
+// A template of the vault is in the configuration folder but is no settings file: it is merged as
+// the note, the drawing or the presentation it is (ADR-0068).
+func TestDecideByPathMergesATemplateByItsContent(t *testing.T) {
+	mod := merge.ChangeModify
+	legacy := pathrules.LegacyConfigDir
+	for _, c := range []struct {
+		path string
+		same bool
+		want merge.Strategy
+	}{
+		{".clarae/templates/Daily.md", true, merge.StrategyMarkdown3Way},
+		{".clarae/templates/Daily.md", false, merge.StrategyMarkdown3Way},
+		{".clarae/templates/Talks/Deck.marp", true, merge.StrategyMarkdown3Way},
+		{".clarae/templates/Board.excalidraw", true, merge.StrategyExcalidrawID},
+		{".clarae/templates/Board.excalidraw", false, merge.StrategyConflictCopy},
+		{".clarae/templates/logo.png", true, merge.StrategyLastWriteWins},
+		{".clarae/templates/logo.png", false, merge.StrategyConflictCopy},
+		{legacy + "/templates/Daily.md", true, merge.StrategyMarkdown3Way}, // folder of 1.x vaults (ADR-0052)
+		{legacy + "/templates/Board.excalidraw", true, merge.StrategyExcalidrawID},
+		// Not templates: the settings stay on their own merge.
+		{".clarae/templates.json", true, merge.StrategyConfigLWW},
+		{".clarae/daily.json", true, merge.StrategyConfigLWW},
+		{".clarae/other/Daily.md", true, merge.StrategyConfigLWW},
+	} {
+		kind := syncproto.KindOf(c.path)
+		if kind != syncproto.KindConfig {
+			t.Fatalf("%s: kind %s, the test assumes a file of the configuration folder", c.path, kind)
+		}
+		if got := merge.DecideByPath(c.path, kind, c.same, mod, mod); got != c.want {
+			t.Errorf("%s (same author %v): got %s, want %s", c.path, c.same, got, c.want)
+		}
+	}
+	// The structural cases are Decide's, whatever the file holds.
+	if got := merge.DecideByPath(".clarae/templates/Daily.md", syncproto.KindConfig, true, merge.ChangeDelete, mod); got != merge.StrategyKeepModification {
+		t.Errorf("delete vs modify: got %s", got)
+	}
+	if got := merge.DecideByPath(".clarae/templates/Daily.md", syncproto.KindConfig, true, merge.ChangeCreate, merge.ChangeCreate); got != merge.StrategyRenameSecond {
+		t.Errorf("create vs create: got %s", got)
+	}
+}
+
 func TestLibraryByIDRejectsWhatItCannotRead(t *testing.T) {
 	good := []byte(`{"libraryItems":[{"id":"a"}]}`)
 	for name, c := range map[string]struct{ ours, theirs []byte }{

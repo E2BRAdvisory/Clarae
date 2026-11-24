@@ -3,9 +3,12 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"sort"
 	"sync"
 	"testing"
 
@@ -337,5 +340,116 @@ func TestShelveConfig(t *testing.T) {
 	empty := newTestFS(t)
 	if n, err := empty.ShelveConfig(); n != 0 || err != nil {
 		t.Fatalf("empty vault: %d %v", n, err)
+	}
+}
+
+func TestWalkConfigVisitsBothFoldersOnce(t *testing.T) {
+	vfs := newTestFS(t)
+	walk := func() []string {
+		t.Helper()
+		var got []string
+		err := vfs.WalkConfig("templates", func(rel string, e Entry) error {
+			// The callback may call back into the FS: no lock is held.
+			if _, err := vfs.ReadConfig("templates/" + rel); err != nil {
+				t.Errorf("ReadConfig(%s) inside the walk: %v", rel, err)
+			}
+			got = append(got, rel+" @ "+e.Path)
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sort.Strings(got)
+		return got
+	}
+	if got := walk(); len(got) != 0 {
+		t.Fatalf("no folder: %v", got)
+	}
+	put(t, vfs, cfgLegacy+"/templates/Daily.md", "former")
+	put(t, vfs, cfgLegacy+"/templates/Old.md", "old")
+	put(t, vfs, cfgCurrent+"/templates/Daily.md", "current")
+	put(t, vfs, cfgCurrent+"/templates/Work/Board.excalidraw", "{}")
+	put(t, vfs, cfgCurrent+"/templates/.DS_Store", "junk")
+	put(t, vfs, cfgCurrent+"/editor.json", "{}")
+	put(t, vfs, "templates/Outside.md", "not a template")
+	want := []string{
+		"Daily.md @ " + cfgCurrent + "/templates/Daily.md", // both have it: the current one, as ReadConfig
+		"Old.md @ " + cfgLegacy + "/templates/Old.md",
+		"Work/Board.excalidraw @ " + cfgCurrent + "/templates/Work/Board.excalidraw",
+	}
+	if got := walk(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("walk = %v\nwant   %v", got, want)
+	}
+	stop := errors.New("stop")
+	if err := vfs.WalkConfig("templates", func(string, Entry) error { return stop }); !errors.Is(err, stop) {
+		t.Fatalf("the error of the callback: %v", err)
+	}
+	if err := vfs.WalkConfig("../x", func(string, Entry) error { return nil }); err == nil {
+		t.Fatal("a name outside the folder was walked")
+	}
+}
+
+func TestAdoptConfig(t *testing.T) {
+	vfs := newTestFS(t)
+	var changed [][]string
+	vfs.SetOnChange(func(paths []string) { changed = append(changed, paths) })
+
+	put(t, vfs, "Templates/Daily.md", "# daily")
+	to, err := vfs.AdoptConfig("Templates/Daily.md", "templates/Daily.md")
+	if err != nil || to != cfgCurrent+"/templates/Daily.md" {
+		t.Fatalf("adopt: %q %v", to, err)
+	}
+	if has(vfs, "Templates/Daily.md") || content(t, vfs, to) != "# daily" {
+		t.Fatal("the file was not moved")
+	}
+	if !has(vfs, "Templates") {
+		t.Fatal("the folder the file left was removed: it is the user's")
+	}
+	if want := [][]string{{"Templates/Daily.md", to}}; !reflect.DeepEqual(changed, want) {
+		t.Fatalf("changes = %v, want %v", changed, want)
+	}
+
+	// Nothing is overwritten, in either folder.
+	put(t, vfs, "Templates/Daily.md", "another")
+	if _, err := vfs.AdoptConfig("Templates/Daily.md", "templates/Daily.md"); !errors.Is(err, ErrExists) {
+		t.Fatalf("the current folder has it: %v", err)
+	}
+	put(t, vfs, cfgLegacy+"/templates/Old.md", "former")
+	put(t, vfs, "Templates/Old.md", "mine")
+	if _, err := vfs.AdoptConfig("Templates/Old.md", "templates/Old.md"); !errors.Is(err, ErrExists) {
+		t.Fatalf("the former folder has it: %v", err)
+	}
+	if content(t, vfs, "Templates/Daily.md") != "another" || content(t, vfs, "Templates/Old.md") != "mine" ||
+		content(t, vfs, to) != "# daily" || content(t, vfs, cfgLegacy+"/templates/Old.md") != "former" {
+		t.Fatal("a refused adoption changed a file")
+	}
+
+	// A linked vault whose settings still live in the former folder: the file goes where
+	// WriteConfig would create it.
+	vfs.SetConfigPolicy(func() bool { return true })
+	put(t, vfs, "Templates/sub/Board.excalidraw", "{}")
+	to, err = vfs.AdoptConfig("Templates/sub/Board.excalidraw", "templates/sub/Board.excalidraw")
+	if err != nil || to != cfgLegacy+"/templates/sub/Board.excalidraw" || !has(vfs, to) {
+		t.Fatalf("adopt with the former folder in use: %q %v", to, err)
+	}
+	vfs.SetConfigPolicy(nil)
+
+	if _, err := vfs.AdoptConfig("Templates/Missing.md", "templates/Missing.md"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a missing source: %v", err)
+	}
+	for name, c := range map[string][2]string{
+		"a folder":                     {"Templates/sub", "templates/sub2"},
+		"a source that is a setting":   {cfgCurrent + "/templates/Daily.md", "templates/Copy.md"},
+		"a name that never syncs":      {"Templates/Daily.md", "workspace.json"},
+		"a name outside the folder":    {"Templates/Daily.md", "../Daily.md"},
+		"a source outside the vault":   {"../Daily.md", "templates/X.md"},
+		"a name in a local-only place": {"Templates/Daily.md", "cache/Daily.md"},
+	} {
+		if to, err := vfs.AdoptConfig(c[0], c[1]); err == nil {
+			t.Errorf("%s: adopted as %q", name, to)
+		}
+	}
+	if content(t, vfs, "Templates/Daily.md") != "another" {
+		t.Fatal("a refused adoption moved the file")
 	}
 }

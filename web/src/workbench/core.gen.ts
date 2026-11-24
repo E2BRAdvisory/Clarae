@@ -171,10 +171,14 @@ export interface CoreClient {
     List(arg1: string): Promise<Data<Array<app.TagCount>>>;
   };
   readonly TemplatesAPI: {
+    Create(arg1: string, arg2: string, arg3: string, arg4: string): Promise<Data<app.TemplateInfo>>;
     CreateFromTemplate(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string): Promise<string>;
     DailyAdjacent(arg1: string, arg2: string, arg3: string, arg4: string, arg5: number): Promise<string>;
+    DeclineMigration(arg1: string): Promise<void>;
     Expand(arg1: string, arg2: string, arg3: string, arg4: string): Promise<string>;
-    List(arg1: string, arg2: string): Promise<Data<Array<app.TemplateInfo>>>;
+    List(arg1: string): Promise<Data<Array<app.TemplateInfo>>>;
+    Migrate(arg1: string): Promise<Data<app.TemplateMigration>>;
+    MigrationPlan(arg1: string): Promise<Data<app.TemplateMigration>>;
     NewUnique(arg1: string, arg2: Data<app.UniqueOptions>): Promise<Data<app.NoteResult>>;
     OpenDaily(arg1: string, arg2: Data<app.DailyOptions>): Promise<Data<app.NoteResult>>;
     ReadSettings(arg1: string): Promise<string>;
@@ -269,7 +273,7 @@ export const BINDINGS = {
   SharingAPI: ['AcceptShare', 'CreateCloudShare', 'CreateShare', 'DeclineShare', 'Invitations', 'ListShares', 'Mounts', 'OpenMount', 'RemoveGrant', 'RemoveMount', 'RevokeShare', 'SearchDirectoryGroups', 'SearchDirectoryUsers', 'SetGrant', 'Share', 'UpdateShare', 'VaultShares'],
   SyncAPI: ['ConflictTexts', 'Conflicts', 'CopyVerdict', 'DeleteCloudVault', 'Devices', 'History', 'Info', 'LinkExisting', 'LinkNew', 'ListCloudVaults', 'ListDeletedCloudVaults', 'RenameCloudVault', 'ResolveConflict', 'RestoreCloudVault', 'RestoreRevision', 'RetryUnsent', 'RevisionText', 'RevokeDevice', 'SetPaused', 'SetPollInterval', 'Status', 'SyncNow', 'Unlink', 'Unsent', 'Usage'],
   TagsAPI: ['List'],
-  TemplatesAPI: ['CreateFromTemplate', 'DailyAdjacent', 'Expand', 'List', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
+  TemplatesAPI: ['Create', 'CreateFromTemplate', 'DailyAdjacent', 'DeclineMigration', 'Expand', 'List', 'Migrate', 'MigrationPlan', 'NewUnique', 'OpenDaily', 'ReadSettings', 'WriteSettings'],
   TerminalAPI: ['CanOpen', 'Close', 'Dock', 'List', 'Open', 'Resize', 'Snapshot', 'State', 'Undock', 'Write'],
   UpdaterAPI: ['Check', 'GetSettings', 'Install', 'SetSettings', 'Skip', 'Status'],
   VaultAPI: ['CloseVault', 'CreateFolder', 'DownloadFile', 'ExportZip', 'ListOpen', 'ListRecent', 'ListTree', 'MergeEdit', 'OpenVault', 'OpenWithSystemApp', 'PickFolder', 'ReadBinary', 'ReadConfig', 'ReadNote', 'RebuildIndex', 'Rename', 'RevealInFolder', 'SaveAttachment', 'Trash', 'WriteConfig', 'WriteNote'],
@@ -466,10 +470,14 @@ export function coreClient(core: CoreCaller, timeoutMs = 0): CoreClient {
     },
     get TemplatesAPI(): CoreClient['TemplatesAPI'] {
       return {
+        Create: (arg1: string, arg2: string, arg3: string, arg4: string) => call('TemplatesAPI', 'Create', [arg1, arg2, arg3, arg4]),
         CreateFromTemplate: (arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) => call('TemplatesAPI', 'CreateFromTemplate', [arg1, arg2, arg3, arg4, arg5]),
         DailyAdjacent: (arg1: string, arg2: string, arg3: string, arg4: string, arg5: number) => call('TemplatesAPI', 'DailyAdjacent', [arg1, arg2, arg3, arg4, arg5]),
+        DeclineMigration: (arg1: string) => call('TemplatesAPI', 'DeclineMigration', [arg1]),
         Expand: (arg1: string, arg2: string, arg3: string, arg4: string) => call('TemplatesAPI', 'Expand', [arg1, arg2, arg3, arg4]),
-        List: (arg1: string, arg2: string) => call('TemplatesAPI', 'List', [arg1, arg2]),
+        List: (arg1: string) => call('TemplatesAPI', 'List', [arg1]),
+        Migrate: (arg1: string) => call('TemplatesAPI', 'Migrate', [arg1]),
+        MigrationPlan: (arg1: string) => call('TemplatesAPI', 'MigrationPlan', [arg1]),
         NewUnique: (arg1: string, arg2: Data<app.UniqueOptions>) => call('TemplatesAPI', 'NewUnique', [arg1, arg2]),
         OpenDaily: (arg1: string, arg2: Data<app.DailyOptions>) => call('TemplatesAPI', 'OpenDaily', [arg1, arg2]),
         ReadSettings: (arg1: string) => call('TemplatesAPI', 'ReadSettings', [arg1]),

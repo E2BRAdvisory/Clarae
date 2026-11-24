@@ -42,12 +42,22 @@ const (
 	ChangeCreate Change = "create"
 )
 
-// DecideByPath is Decide for a file whose path is known: the same table, except that a settings
-// file with a structure of its own gets the strategy for it (today the shape library, whose items
-// would otherwise be one key of a last-write-wins merge, losing the shapes one device added).
+// DecideByPath is Decide for a file whose path is known: the same table, except that a file of the
+// configuration folder that is not a JSON object of settings gets the strategy for what it holds:
+//
+//   - the shape library, whose items would otherwise be one key of a last-write-wins merge, losing
+//     the shapes one device added;
+//   - a template of the vault (pathrules.IsTemplatePath, ADR-0068), which is a note, a drawing or a
+//     presentation: it is merged as the same file outside the folder would be, where the merge of
+//     the settings would refuse it (it is no JSON object) and leave a conflict copy at every
+//     concurrent edit.
+//
 // path is the vault-relative path as the sync knows it, under either name of the configuration
 // folder.
 func DecideByPath(path string, kind syncproto.FileKind, sameAuthor bool, ours, theirs Change) Strategy {
+	if kind == syncproto.KindConfig && pathrules.IsTemplatePath(path) {
+		return Decide(syncproto.ContentKindOf(path), sameAuthor, ours, theirs)
+	}
 	s := Decide(kind, sameAuthor, ours, theirs)
 	if s == StrategyConfigLWW && pathrules.IsShapeLibrary(path) {
 		return StrategyLibraryByID

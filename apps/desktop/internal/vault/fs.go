@@ -632,6 +632,38 @@ func (f *FS) Delete(rel string) error {
 	return nil
 }
 
+// PruneEmptyParents removes the folders that the file at fileRel left empty when it went away: its
+// folder, then the parents, up to and including stopRel, each only while it holds nothing at all.
+// A folder with anything in it stays, as does everything above it; fileRel must lie below stopRel.
+// Folders are not synchronized, so this only tidies the disk.
+func (f *FS) PruneEmptyParents(fileRel, stopRel string) error {
+	_, file, err := f.Resolve(fileRel)
+	if err != nil {
+		return err
+	}
+	_, stop, err := f.Resolve(stopRel)
+	if err != nil {
+		return err
+	}
+	if stop == "" || !pathrules.HasPrefix(file, stop) || file == stop {
+		return &pathrules.Error{Path: fileRel, Reason: "not below the folder to tidy"}
+	}
+	var removed []string
+	unlock := f.lockTree()
+	for dir, _ := pathrules.Split(file); dir != "" && pathrules.HasPrefix(dir, stop); dir, _ = pathrules.Split(dir) {
+		// os.Remove refuses a folder that is not empty, and never follows a symlink.
+		if err := os.Remove(filepath.Join(f.root, filepath.FromSlash(dir))); err != nil {
+			break
+		}
+		removed = append(removed, dir)
+	}
+	unlock()
+	if len(removed) > 0 {
+		f.changed(removed...)
+	}
+	return nil
+}
+
 // Entry describes one file or folder in the vault tree.
 type Entry struct {
 	Path  string             `json:"path"`

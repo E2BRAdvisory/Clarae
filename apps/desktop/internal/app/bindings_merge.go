@@ -34,7 +34,8 @@ func (v *VaultAPI) MergeEdit(vaultID, relPath, base, ours, theirs string) (Merge
 		return MergeEditResult{}, bindingError(err)
 	}
 	sameAuthor := v.app.sync.SameAuthorOnDisk(context.Background(), vaultID, path, hashing.Sum([]byte(theirs)).Hex())
-	strategy := merge.Decide(syncproto.KindOf(path), sameAuthor, merge.ChangeModify, merge.ChangeModify)
+	// By path, as the sync decides (resolve.go): a template of the vault is merged as what it holds.
+	strategy := merge.DecideByPath(path, syncproto.KindOf(path), sameAuthor, merge.ChangeModify, merge.ChangeModify)
 
 	b, o, t := []byte(base), []byte(ours), []byte(theirs)
 	var res merge.Result

@@ -153,6 +153,11 @@ func (d *DrawingAPI) WriteExport(vaultID, drawingPath, variant, format, dataBase
 	if err != nil {
 		return "", err
 	}
+	if norm, nerr := pathrules.Normalize(drawingPath); nerr == nil && pathrules.IsConfigPath(norm) {
+		// The template of a drawing, open in a tab: no picture is written next to it, where it would
+		// sync with the settings and sit among the templates.
+		return "", errors.New("invalid: a drawing of the configuration folder has no export file")
+	}
 	if _, err := ov.FS.ReadFile(drawingPath); err != nil {
 		return "", bindingError(err) // the drawing must exist
 	}

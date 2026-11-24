@@ -384,3 +384,44 @@ func TestWalkReportTellsWhatItSkips(t *testing.T) {
 		}
 	}
 }
+
+func TestPruneEmptyParents(t *testing.T) {
+	f := newTestFS(t)
+	var changed []string
+	f.SetOnChange(func(paths []string) { changed = append(changed, paths...) })
+	put(t, f, "Old/keep.md", "x")
+	for _, dir := range []string{"Old/a/b", "Old/mine", "Gone/x/y"} {
+		if err := os.MkdirAll(filepath.Join(f.Root(), filepath.FromSlash(dir)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	changed = nil
+
+	// The folders a file left empty go, up to the first that holds something; an empty folder that
+	// was not on the way of the file is the user's and stays.
+	if err := f.PruneEmptyParents("Old/a/b/moved.md", "Old"); err != nil {
+		t.Fatal(err)
+	}
+	if has(f, "Old/a") || !has(f, "Old/mine") || !has(f, "Old/keep.md") {
+		t.Fatalf("a %v, mine %v, keep %v", has(f, "Old/a"), has(f, "Old/mine"), has(f, "Old/keep.md"))
+	}
+	if strings.Join(changed, ",") != "Old/a/b,Old/a" {
+		t.Fatalf("changes = %v", changed)
+	}
+	// Up to the stop folder, included, and never above it.
+	if err := f.PruneEmptyParents("Gone/x/y/moved.md", "Gone/x"); err != nil || has(f, "Gone/x") || !has(f, "Gone") {
+		t.Fatalf("%v: x %v, Gone %v", err, has(f, "Gone/x"), has(f, "Gone"))
+	}
+	// Nothing to do is not an error; what is not below the folder is refused.
+	if err := f.PruneEmptyParents("Missing/a.md", "Missing"); err != nil {
+		t.Fatalf("a missing folder: %v", err)
+	}
+	for _, c := range [][2]string{{"Old/keep.md", "Other"}, {"Old", "Old"}, {"a.md", ""}, {"../x/a.md", "../x"}} {
+		if err := f.PruneEmptyParents(c[0], c[1]); err == nil {
+			t.Errorf("PruneEmptyParents(%q, %q) was accepted", c[0], c[1])
+		}
+	}
+	if !has(f, "Old/keep.md") {
+		t.Fatal("a file was removed")
+	}
+}

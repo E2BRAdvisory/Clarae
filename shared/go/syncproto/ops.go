@@ -46,6 +46,14 @@ func KindOf(path string) FileKind {
 	if pathrules.IsConfigPath(path) {
 		return KindConfig
 	}
+	return ContentKindOf(path)
+}
+
+// ContentKindOf classifies a normalized clear-text path by its extension alone, wherever the file
+// is. It is KindOf for a file outside the configuration folder; inside it, it tells what a file
+// that is not a settings file holds (a template of the vault, ADR-0068). files.kind is always
+// KindOf: this one only chooses how the client merges.
+func ContentKindOf(path string) FileKind {
 	switch pathrules.Ext(path) {
 	case ".md", ".marp": // a Marp presentation is Markdown: 3-way merge, index, links (ADR-0047)
 		return KindMarkdown

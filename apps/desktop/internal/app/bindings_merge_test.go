@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"clarae/shared/merge"
+	"clarae/shared/pathrules"
 )
 
 func excalidrawDoc(t *testing.T, els []map[string]any, files map[string]any) string {
@@ -129,6 +130,41 @@ func TestMergeEditMarkdown(t *testing.T) {
 	}
 	if r.Clean || r.Merged != "" || r.Strategy != string(merge.StrategyMarkdown3Way) {
 		t.Fatalf("conflicting case: %+v, want not clean, no text", r)
+	}
+}
+
+// A template of the vault is in the configuration folder, whose files are settings merged key by
+// key by the sync and not at all here; it is merged as the note or the drawing it is (ADR-0068).
+func TestMergeEditTemplate(t *testing.T) {
+	a, info, _ := newTestApp(t)
+	v := NewVaultAPI(a)
+	base := "one\ntwo\nthree\nfour\nfive\nsix\nseven\n"
+	r, err := v.MergeEdit(info.ID, tplDir+"/Daily.md", base, "ONE\ntwo\nthree\nfour\nfive\nsix\nseven\n", "one\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n")
+	if err != nil || !r.Clean || r.Strategy != string(merge.StrategyMarkdown3Way) || r.Merged != "ONE\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n" {
+		t.Fatalf("the template of a note: %+v, %v", r, err)
+	}
+	r, err = v.MergeEdit(info.ID, tplFormer+"/Talk.marp", base, "ONE\ntwo\nthree\nfour\nfive\nsix\nseven\n", base)
+	if err != nil || !r.Clean || r.Strategy != string(merge.StrategyMarkdown3Way) {
+		t.Fatalf("the template of a presentation, under the former name of the folder: %+v, %v", r, err)
+	}
+	doc := func(ids ...string) string {
+		var els []map[string]any
+		for _, id := range ids {
+			els = append(els, el(id, 1, false))
+		}
+		return excalidrawDoc(t, els, nil)
+	}
+	r, err = v.MergeEdit(info.ID, tplDir+"/Board.excalidraw", doc("a"), doc("a", "o"), doc("a", "t"))
+	if err != nil || !r.Clean || r.Strategy != string(merge.StrategyExcalidrawID) {
+		t.Fatalf("the template of a drawing: %+v, %v", r, err)
+	}
+	if els := idsOf(t, r.Merged); len(els) != 3 {
+		t.Fatalf("an element was lost: %s", r.Merged)
+	}
+	// A settings file is not merged here, as before.
+	r, err = v.MergeEdit(info.ID, pathrules.ConfigDir+"/editor.json", `{"a":1}`, `{"a":2}`, `{"a":3}`)
+	if err != nil || r.Clean || r.Strategy != string(merge.StrategyConfigLWW) {
+		t.Fatalf("a settings file: %+v, %v", r, err)
 	}
 }
 
