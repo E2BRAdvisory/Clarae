@@ -6,13 +6,14 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
-## [1.8.6] - 2026-11-23
+## [1.8.6] - 2026-11-24
 
-Milestone M30 ([roadmap](docs/roadmap.md) §13-tervicies), sessioni M30-S1…S2: **la presentazione di un `.marp` riempie davvero lo schermo anche nell'app desktop su macOS**. La 1.8.5 aveva tolto l'effetto dello zoom dell'interfaccia, ma nella WKWebView reale la slide restava alla sua dimensione naturale (1280×720) nell'angolo in alto a sinistra. Nessuna migrazione del database, nessun cambiamento dei formati né del protocollo.
+Milestone M30 ([roadmap](docs/roadmap.md) §13-tervicies), sessioni M30-S1…S4: **la presentazione di un `.marp` e le miniature della scheda Slideshow riempiono davvero il loro spazio anche nell'app desktop su macOS**. La 1.8.5 aveva tolto l'effetto dello zoom dell'interfaccia, ma nella WKWebView reale la slide restava alla sua dimensione naturale (1280×720) nell'angolo in alto a sinistra. Nessuna migrazione del database, nessun cambiamento dei formati né del protocollo.
 
 ### Client desktop e workbench
 
-- **Presentazione Marp a tutto schermo in WebKit**: WebKit non scala l'HTML di un `<foreignObject>` con il `viewBox` del suo `<svg>` (bug 23113), e il polyfill di Marp, applicato solo quando le misure del layout mostravano il difetto, nella WKWebView dell'app non scattava. Ora la slide si dispone alla sua dimensione naturale (il `viewBox`, 1280×720 di norma) e `div.marpit` viene scalato e centrato con una trasformazione CSS (`fitShowSlide` in `marp/document.ts`), che vale in ogni motore senza polyfill e segue il ridimensionamento dello schermo. `e2e/marp-show-layout.spec.ts` prova anche 1920×1080 e controlla che l'adattamento venga dalla trasformazione e non dal polyfill.
+- **Presentazione Marp a tutto schermo in WebKit**: WebKit non scala l'HTML di un `<foreignObject>` con il `viewBox` del suo `<svg>` (bug 23113), e il polyfill di Marp, applicato solo quando le misure del layout mostravano il difetto, nella WKWebView dell'app non scattava. Ora la slide si dispone alla sua dimensione naturale (il `viewBox`, 1280×720 di norma) e `div.marpit` viene scalato e centrato con una trasformazione CSS (`fitSlide` in `marp/document.ts`), che vale in ogni motore senza polyfill e segue il ridimensionamento dello schermo. `e2e/marp-show-layout.spec.ts` prova anche 1920×1080 e controlla che l'adattamento venga dalla trasformazione e non dal polyfill.
+- **Miniature della scheda Slideshow senza polyfill**: anche le miniature allargavano l'`<svg>` della slide alla card e si affidavano al polyfill di Marp. Ora la slide sta alla sua dimensione naturale in un riquadro dello shadow root che prende le proporzioni dal `viewBox` (anche le presentazioni 4:3) ed è scalata con la stessa trasformazione della presentazione (`fitSlide`, condivisa). Il polyfill non serve più: tolti `marp/polyfill.ts`, il suo test e la dipendenza diretta da `@marp-team/marpit-svg-polyfill`.
 
 ### Contratti
 
@@ -20,10 +21,10 @@ Milestone M30 ([roadmap](docs/roadmap.md) §13-tervicies), sessioni M30-S1…S2:
 
 ### Verificato
 
-- `task ci` verde sull'albero della 1.8.6 (551 s): lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
-- `e2e/marp-show-layout.spec.ts` e `e2e/marp.spec.ts` sul mock, su Chromium e WebKit (`E2E_WEBKIT=1`): tutti verdi.
-- **Non eseguiti** il `task e2e` completo, `task test-integration` e la prova manuale nell'app desktop: WebKit headless di Playwright non riproduceva il difetto della WKWebView, quindi la correzione va confermata a mano nell'app.
-- Le miniature del pannello Slideshow usano ancora il polyfill (`fitSlides`): se nell'app compaiono fuori posto, si correggono allo stesso modo.
+- Prima pubblicazione della 1.8.6 (M30-S1…S2): `task ci` verde (551 s): lint (Go, TS, nome del prodotto), `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go con `-race` (122 pacchetti), vitest, conformance, `test-wasm`, `test-core`, budget, parità (99 funzioni) e `check-gen`.
+- Con M30-S3 (miniature): `task ci` **non è stato completato**. Verdi lint, `vet-windows`, `vet-linux`, typecheck, `govulncheck`, test Go, vitest (2753 test del workbench) e la conformance Go e del parser TS; il gate dell'editor live (`src/test/conformance.test.ts`, Milkdown) è andato due volte in timeout nel `beforeAll` (600 s) con il Mac a batteria e sotto carico (2% di CPU per il processo), e non usa codice Marp. `test-wasm` non eseguito; `test-core`, `web-budget`, `parity` e `check-gen` verdi eseguiti a parte.
+- `e2e/marp-show-layout.spec.ts` (con il nuovo test delle miniature) e `e2e/marp.spec.ts` sul mock, su Chromium e WebKit (`E2E_WEBKIT=1`): 20 test verdi; vitest di `marp/` e `sidebar/` (153 test).
+- **Non eseguiti** il `task e2e` completo, `task test-integration` e la prova manuale nell'app desktop: WebKit headless di Playwright non riproduceva il difetto della WKWebView, quindi presentazione e miniature vanno confermate a mano nell'app.
 
 ## [1.8.5] - 2026-11-23
 
