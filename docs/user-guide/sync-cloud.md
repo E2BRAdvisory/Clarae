@@ -38,6 +38,30 @@ Il client elenca le modifiche del server, scarica quelle nuove, poi invia le pro
 
 Si sincronizzano le note, gli allegati e i file di tipo `.canvas`, `.base`, `.excalidraw`, più alcune impostazioni (segnalibri, scorciatoie…). **Non** si sincronizzano l'indice di ricerca, i workspace e le impostazioni specifiche del dispositivo.
 
+### File non inviati
+
+_Impostazioni → Sincronizzazione_ ha un blocco **File non inviati**: elenca i file di questo dispositivo che non arrivano al cloud, raggruppati per motivo, con il numero di file di ogni gruppo e, accanto al percorso, il codice o il dettaglio dell'errore. Se non c'è nulla da segnalare compare «Tutti i file sono stati inviati.». L'elenco si aggiorna da solo a ogni ciclo di sincronizzazione.
+
+| Motivo mostrato                                    | Che cosa significa e che cosa fare                                                                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Troppo grandi                                      | Il file supera il limite di dimensione per file stabilito dall'amministratore. Riducetelo o tenetelo fuori dal vault, poi _Riprova_.                |
+| Cifratura non riuscita                             | Il percorso o il contenuto non si è potuto cifrare (vault privato). _Riprova_; se si ripete, controllate il log.                                    |
+| Spostamento che svuoterebbe una cartella condivisa | Lo spostamento lascerebbe vuota una cartella condivisa con voi. Rimettete il file al suo posto, oppure _Riprova_ dopo aver cambiato lo spostamento. |
+| Rifiutati dal server                               | Il server ha rifiutato il file; il codice è accanto al percorso. Dopo aver rimosso la causa, _Riprova_.                                             |
+| In errore, si riprova                              | L'invio è fallito e l'app ritenta da sola: di solito non serve fare nulla. Se il file passa a un altro gruppo, agite secondo quel motivo.           |
+| Troppe modifiche concorrenti: risolvi i conflitti  | Altri dispositivi continuano a modificare il file. Usate _Risolvi conflitti di sincronizzazione_ (vedi [Conflitti](#conflitti)).                    |
+| In attesa di unire una modifica del server         | Il file sarà inviato dopo l'unione di una modifica arrivata dal server: lo risolve il ciclo successivo.                                             |
+| Nome non valido: rinomina il file                  | Il nome non è ammesso dalle regole del vault (per esempio caratteri o formato non rappresentabili): rinominate il file.                             |
+| Collegamenti simbolici (mai seguiti)               | I collegamenti simbolici non si sincronizzano mai. Se serve il contenuto, copiatelo nel vault come file.                                            |
+
+Gli ultimi due motivi dell'elenco non sono errori: sotto **Cartelle escluse** (voce richiudibile, con il numero) compaiono, come informazione, le cartelle dei sistemi di versione («Repository di un sistema di versione») e il cestino del vault («Cestino del vault»). Non richiedono azioni e non sono contate tra i file non inviati.
+
+**Riprova** compare accanto ai file che l'app ha smesso di ritentare e che possono essere reinviati (troppo grandi, cifratura non riuscita, spostamento che svuoterebbe una cartella condivisa, rifiutati dal server): rimette in coda quel file. **Riprova tutti** rimette in coda tutti questi file insieme. I pulsanti non ci sono per gli altri motivi, perché il file si sblocca in un altro modo (conflitti, rinomina) o da solo. Il file viene reinviato al ciclo successivo e, se il problema persiste, torna nell'elenco.
+
+**Che cosa non è elencato.** Non si sincronizzano mai, e non compaiono nel blocco: i file di sistema come `.DS_Store` e `Thumbs.db`, i file temporanei e i dati locali del dispositivo in `.clarae`.
+
+**Cartelle dei sistemi di versione.** Le cartelle `.git`, `.hg`, `.svn`, `.bzr` e `.jj` (anche come file, a qualunque profondità, senza distinzione di maiuscole) non si sincronizzano mai, nemmeno se il vault è un repository: per portare il repository su un altro dispositivo usate il sistema di versione stesso. Le note del vault continuano a sincronizzarsi. Se copie di quei file sono già nel cloud (inviate da una versione precedente) **restano lì e contano nella quota**; i dispositivi aggiornati non le toccano né le cancellano.
+
 ## Conflitti
 
 Il merge avviene **sul vostro dispositivo**. Per le note Markdown le modifiche concorrenti in punti diversi si **uniscono automaticamente** (merge a tre vie); se le stesse righe cambiano da due parti, o per file di altro tipo, si crea una **copia di conflitto** (`nome (conflitto <dispositivo> <data ora>).ext`) e nessuna versione viene persa: _Risolvi conflitti di sincronizzazione_ mostra le due versioni affiancate (diff) e permette di tenere una, l'altra o unirle a mano. Le versioni scartate restano nella cronologia ([Cronologia e recupero](cronologia-recupero.md)). Tra i file di altro tipo, i disegni si fondono per elemento quando i dispositivi sono dello stesso utente, e la **libreria di forme** dei disegni si fonde sempre forma per forma: se due dispositivi ne aggiungono di diverse restano entrambe.

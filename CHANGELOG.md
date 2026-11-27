@@ -6,6 +6,23 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S4 e M26-S5, [ADR-0066](docs/adr/0066-vcs-esclusi-e-file-non-inviati.md) (accettata): **Impostazioni › Sincronizzazione mostra i file che questo dispositivo non invia al cloud, con il motivo**. Il core e i binding sono già nella 1.8.3. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
+
+### Client desktop
+
+- **Blocco «File non inviati»**: i file raggruppati per motivo (troppo grandi, cifratura non riuscita, spostamento che svuoterebbe una cartella condivisa, rifiutati dal server, in errore con nuovi tentativi, troppe modifiche concorrenti, in attesa di unire una modifica del server, nome non valido, collegamenti simbolici), con il codice dell'errore. «Riprova» rimette in coda un file che l'app ha smesso di ritentare, «Riprova tutti» li rimette in coda tutti. Le cartelle dei sistemi di versione e il cestino compaiono, solo come informazione, sotto «Cartelle escluse».
+- **Nuova azione** `sync:retry-unsent`.
+- **Corretto**: un file rifiutato con `BLOB_MISSING` o `PATH_COLLISION` per cinque volte smetteva di partire senza lasciare un errore, quindi non compariva tra i file non inviati e «Riprova» non lo rimetteva in coda. Ora, finché restano tentativi, è elencato «in errore, si riprova» con il codice; esauriti i tentativi è messo da parte come «Rifiutati dal server» e «Riprova» lo rimanda.
+
+### Client workbench (browser)
+
+- Lo stesso blocco nel workbench web, sul core WebAssembly: la voce `sync.unsent` del registro di parità è `yes` anche sul web, provata dallo spec della matrice `sync-unsent.spec.ts` (il core rifiutato dal mock REST, poi «Riprova»).
+
+### Documentazione
+
+- [Sincronizzazione e cloud](docs/user-guide/sync-cloud.md): sezione «File non inviati» (motivi, «Riprova», che cosa non è elencato, cartelle `.git` e simili mai sincronizzate; i file già nel cloud restano e contano nella quota).
+- [Risoluzione dei problemi](docs/user-guide/risoluzione-problemi.md): voce «Un file non arriva sugli altri dispositivi».
+
 ## [1.8.7] - 2026-11-24
 
 Milestone M31 ([roadmap](docs/roadmap.md) §13-quatervicies), sessioni M31-S1…S5, [ADR-0068](docs/adr/0068-template-in-clarae-templates.md) (proposta): **i template stanno nella cartella `.clarae/templates` del vault e valgono per note, disegni e presentazioni**. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
