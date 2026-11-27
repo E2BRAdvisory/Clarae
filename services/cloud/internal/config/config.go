@@ -205,7 +205,7 @@ func Load(role Role, version string) (Config, error) {
 	if deprecated {
 		allowName = envcompat.LegacyPrefix + "ALLOW_PLACEHOLDER_SECRETS"
 		c.Deprecations = append(c.Deprecations, allowName+" is deprecated, use "+envcompat.Prefix+
-			"ALLOW_PLACEHOLDER_SECRETS (the old name is dropped in 2.0)")
+			"ALLOW_PLACEHOLDER_SECRETS (the old name is dropped in a major release after 2.0, ADR-0070)")
 	}
 	c.AllowPlaceholderSecrets = p.boolValue(allowName, allow, false)
 
@@ -219,7 +219,7 @@ const legacyFamily = "memobrain"
 
 // defaultAdminRoles are the realm roles of an administrator: the new one and the one of 1.x,
 // so that a realm made for 1.x keeps working and a new realm is not forced to rename anything
-// (dropped in 2.0, with the legacy names). internal/auth.DefaultAdminRoles is the same list.
+// (dropped in a major release after 2.0, ADR-0070, with the legacy names). internal/auth.DefaultAdminRoles is the same list.
 const defaultAdminRoles = "clarae-admin,memobrain-admin"
 
 // nameSet is the set of defaults that carry the product name.

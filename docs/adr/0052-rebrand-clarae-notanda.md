@@ -15,6 +15,8 @@
 
 **Aggiornamento 2026-11-16 (decisione dell'owner): accettata.** L'owner accetta l'ADR e dispone che `Specifications.md` v1.7 lo recepisca con la nomenclatura _Clarae notanda_, `clarae` e `.clarae/` in tutto lo spec; restano `memobrain` solo le etichette crittografiche congelate (`memobrain/v1/*`, `memobrain/v2/*`) e i riferimenti ai dati e ai client della 1.x. La sezione «Sostituzioni da riportare in `Specifications.md`» è la base; i numeri di riga si riferiscono alla v1.5 e vanno ricalcolati sulla v1.6 (`command grep -n -i memobrain Specifications.md`). La sintesi con le eccezioni è in [`../spec-v1.7-proposta.md`](../spec-v1.7-proposta.md). **Emendamento:** [ADR-0059](0059-pulizia-cartella-configurazione-legacy-e-zip-coerente.md) (accettata lo stesso giorno) toglie la regola «mai cancellazioni» della fase 1 della cartella `.memobrain/`: dalla 1.7.2 la pulizia cancella solo ciò che `.clarae/` ha già o che è un duplicato, e manda nel cestino del vault la copia legacy diversa; il testo sopra e sotto resta lo storico della decisione.
 
+> **Nota (2026-11-27).** [ADR-0070](0070-2-0-senza-rimozione-compatibilita-1x.md) rinvia a una release major successiva alla 2.0 tutte le rimozioni che questo ADR fissa «nella 2.0»: la 2.0.0 non toglie la compatibilità con la 1.x. Il testo qui sotto è lo storico della decisione.
+
 ## Contesto
 
 Il prodotto cambia nome e aspetto: da «MemoBrain Notes» a **«Clarae notanda»**, con il payoff **«Your knowledge, carefully preserved in its clarity.»** e una nuova palette. Le funzionalità restano invariate.

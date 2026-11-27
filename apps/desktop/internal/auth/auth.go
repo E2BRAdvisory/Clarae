@@ -77,7 +77,7 @@ const DeviceNameEnv = "CLARAE_DEVICE_NAME"
 const SchemeRedirectURI = "clarae://auth/callback"
 
 // LegacySchemeRedirectURI is the callback that the realms made for 1.x have registered: an
-// identity provider that rejects SchemeRedirectURI is tried with it (dropped in 2.0).
+// identity provider that rejects SchemeRedirectURI is tried with it (dropped in a major release after 2.0, ADR-0070).
 const LegacySchemeRedirectURI = "memobrain://auth/callback"
 
 // Profile is the signed-in user as seen by the client.

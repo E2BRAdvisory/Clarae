@@ -13,7 +13,7 @@
 # volume is initialised, and KC_REALM is the realm Keycloak imports (another name makes a second, empty
 # realm). Set them to what the installation was created with (memobrain-onprem, memobrain, memobrain,
 # memobrain): docs/admin-guide/migrazione-clarae.md. The CLARAE_* variables of the .env also still
-# accept their MEMOBRAIN_* name of 1.x (dropped in 2.0): CLARAE_x wins when both are set.
+# accept their MEMOBRAIN_* name of 1.x (dropped in a major release after 2.0, ADR-0070): CLARAE_x wins when both are set.
 name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in .env (clarae-onprem for a new installation, memobrain-onprem for one created before 1.5, whose volumes another name would not find)}
 
 x-cloud-env: &cloud-env

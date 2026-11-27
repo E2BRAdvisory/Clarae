@@ -66,7 +66,7 @@ func run(role config.Role) error {
 	if cfg.LegacyNames {
 		// Not an error: nothing has to change until the realm is renamed on purpose.
 		logger.Warn().Str("issuer", cfg.OIDC.Issuer).Msg("the OIDC realm is the one of a 1.x installation: " +
-			"the names of 1.x are the defaults (audience, OIDC clients, buckets, metrics namespace) and are supported until 2.0")
+			"the names of 1.x are the defaults (audience, OIDC clients, buckets, metrics namespace) and are supported until a major release after 2.0 (ADR-0070)")
 	}
 	for _, d := range cfg.Deprecations {
 		logger.Warn().Msg(d)

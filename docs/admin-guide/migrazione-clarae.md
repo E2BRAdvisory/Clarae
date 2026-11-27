@@ -13,7 +13,7 @@ La 1.7.0 toglie tre compatibilità con la 1.x che la 1.5 teneva in piedi e che l
 3. **Non fate mai girare un pod 1.4 (o precedente) insieme a un pod 1.7 (o successivo) sullo stesso database.** Dalla 1.7 gli advisory lock di blob, quota degli upload ed export hanno solo il nome `clarae.*`; un pod 1.4 prende solo `memobrain.*`, quindi i due non si escluderebbero più (due upload dello stesso blob o due controlli di quota dello stesso utente potrebbero correre insieme). Da una 1.4 o precedente si passa per la 1.5 o la 1.6 e solo dopo alla 1.7. Le versioni 1.5 e 1.6 convivono sia con la 1.4 sia con la 1.7, quindi l'aggiornamento a rotazione 1.6 → 1.7 è sicuro.
 4. **Aggiornate il cloud alla 1.7** (Compose: `CLARAE_VERSION`; Helm: `--version`). Nessuna migrazione del database in questa versione.
 
-Il resto della compatibilità (variabili `MEMOBRAIN_*` del Compose, `nameOverride: memobrain`, realm, schema `memobrain://`, servizio gRPC `memobrain.v1`, …) resta fino alla 2.0, come nella [tabella delle rimozioni](#variabili-deprecate-e-rimozioni).
+Il resto della compatibilità (variabili `MEMOBRAIN_*` del Compose, `nameOverride: memobrain`, realm, schema `memobrain://`, servizio gRPC `memobrain.v1`, …) resta fino a una release major successiva alla 2.0 (ADR-0070), come nella [tabella delle rimozioni](#variabili-deprecate-e-rimozioni).
 
 ## Che cosa cambia e che cosa resta
 
@@ -78,7 +78,7 @@ Differenze dei valori rispetto alla 1.x:
 - `config:` non elenca più `OIDC_AUDIENCE`, `OIDC_ALLOWED_AZP`, `S3_BUCKET_BLOBS`, `S3_BUCKET_EXPORTS`, `KC_REALM`, `KC_ADMIN_CLIENT_ID`: li decide il servizio dall'issuer (realm `memobrain` → nomi della 1.x, altrimenti `clarae-*`). Un valore impostato nei vostri `values` continua a vincere. **Attenzione:** se il vostro realm **non** si chiama `memobrain` ma i client usano i nomi `memobrain-*` e vi affidavate ai default del chart 1.x, impostate esplicitamente in `config:` `OIDC_AUDIENCE`, `OIDC_ALLOWED_AZP`, `OIDC_DESKTOP_CLIENT_ID`, `OIDC_WEB_CLIENT_ID`, `KC_ADMIN_CLIENT_ID` e i bucket: all'avvio il servizio scrive nel log il riepilogo `names in use` con i nomi effettivi.
 - `ingress.grpc.legacyPath` (default `/memobrain.v1.NotifyService`): con `ingress.grpc.mode: path` l'Ingress gRPC instrada anche il servizio della 1.x; con `mode: host` ogni path va al servizio. Vuoto = non instradato.
 - `image.repository` di default è `ghcr.io/e2br/clarae-cloud`. Se i vostri valori impostano `ghcr.io/<owner>/memobrain-cloud` continua a funzionare per la 1.5 e la 1.6, ma **non per la 1.7**, che non pubblica quell'immagine: passate a `ghcr.io/<owner>/clarae-cloud` (o togliete l'override) prima di portare la versione a 1.7.
-- `config.CLARAE_ALLOW_PLACEHOLDER_SECRETS` (e, fino alla 2.0, `config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS`) per le prove con segreti segnaposto.
+- `config.CLARAE_ALLOW_PLACEHOLDER_SECRETS` (e, fino a una release major successiva alla 2.0 (ADR-0070), `config.MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS`) per le prove con segreti segnaposto.
 - `values.schema.json` accetta `nameOverride`, `fullnameOverride` e `ingress.grpc.legacyPath`.
 
 Durante l'aggiornamento a rotazione dalla 1.4 alla 1.5 (o alla 1.6) girano per un po' repliche vecchie e nuove insieme: gli advisory lock a doppio nome le tengono in mutua esclusione (nessuna azione richiesta). Questo vale **solo fino alla 1.6**: dalla 1.7 il doppio nome non c'è più e una replica 1.4 o precedente non deve girare insieme a una 1.7 (vedi [Aggiornare alla 1.7](#aggiornare-alla-17)).
@@ -88,7 +88,7 @@ Durante l'aggiornamento a rotazione dalla 1.4 alla 1.5 (o alla 1.6) girano per u
 **Il realm esistente non si reimporta e non si rinomina.** Cambiarne il nome cambierebbe l'URL dell'issuer e invaliderebbe sessioni, token e configurazioni dei client. Si fanno solo due cose, entrambe facoltative per il funzionamento del cloud ma consigliate:
 
 1. **Redirect del client desktop.** Nel client `memobrain-desktop` del realm aggiungete ai _Valid redirect URIs_ `clarae://auth/callback` e ai _Valid post logout redirect URIs_ `clarae://auth/logout`, **tenendo** quelli `memobrain://auth/callback` e `memobrain://auth/logout` (servono ai client 1.4.0). Finché manca il redirect nuovo, secondo ADR-0052 il client desktop 1.5 ricade sul vecchio. I realm importati dalla 1.5 (`deploy/keycloak*/realm-clarae.json`) hanno già entrambi.
-2. **Ruoli (rinomina facoltativa).** Il servizio riconosce come amministratore chi ha `clarae-admin` **oppure** `memobrain-admin` (`OIDC_ADMIN_ROLES`, default `clarae-admin,memobrain-admin`): non serve rinominare niente. Se rinominate il ruolo nella console Keycloak, le assegnazioni restano; i token già emessi continuano a portare il vecchio nome fino al rinnovo, e per questo i due nomi sono accettati insieme. Dalla console admin del cloud, la promozione assegna il primo ruolo della lista presente nel realm, e la revoca toglie tutti quelli posseduti (un realm con il solo `memobrain-admin` continua a funzionare). Restringere l'elenco a un solo nome richiede di impostare `OIDC_ADMIN_ROLES` e dura finché non rimuovete il nome della 1.x (2.0).
+2. **Ruoli (rinomina facoltativa).** Il servizio riconosce come amministratore chi ha `clarae-admin` **oppure** `memobrain-admin` (`OIDC_ADMIN_ROLES`, default `clarae-admin,memobrain-admin`): non serve rinominare niente. Se rinominate il ruolo nella console Keycloak, le assegnazioni restano; i token già emessi continuano a portare il vecchio nome fino al rinnovo, e per questo i due nomi sono accettati insieme. Dalla console admin del cloud, la promozione assegna il primo ruolo della lista presente nel realm, e la revoca toglie tutti quelli posseduti (un realm con il solo `memobrain-admin` continua a funzionare). Restringere l'elenco a un solo nome richiede di impostare `OIDC_ADMIN_ROLES` e dura finché il nome della 1.x non viene rimosso (in una release major successiva alla 2.0, ADR-0070).
 
 I client `memobrain-web`, `memobrain-admin-svc` e il service account non cambiano. Lo scope che aggiunge `aud=memobrain-api` resta com'è.
 
@@ -132,13 +132,13 @@ Il cloud non aggiorna i client. Le build desktop pubblicate non hanno l'aggiorna
 | Immagine pubblicata anche come `memobrain-cloud`                                                | 1.7 (eseguita nella 1.7.0) |
 | Advisory lock con il nome `memobrain.*` (presi prima di quelli nuovi)                           | 1.7 (eseguita nella 1.7.0) |
 | Default `false` di `features.config_dir_v2` (diventa acceso)                                    | 1.7 (eseguita nella 1.7.0) |
-| Variabili `MEMOBRAIN_HOST`, `_SITE`, `_IMAGE`, `_VERSION`, `_ALLOW_PLACEHOLDER_SECRETS`         | 2.0                        |
-| Default della 1.x per il realm `memobrain` (audience, client, bucket, namespace delle metriche) | 2.0                        |
-| Ruolo admin `memobrain-admin` nel default di `OIDC_ADMIN_ROLES`                                 | 2.0                        |
-| Servizio gRPC `memobrain.v1.NotifyService` e `ingress.grpc.legacyPath`                          | 2.0                        |
-| Redirect `memobrain://` nei realm                                                               | 2.0                        |
+| Variabili `MEMOBRAIN_HOST`, `_SITE`, `_IMAGE`, `_VERSION`, `_ALLOW_PLACEHOLDER_SECRETS`         | major dopo la 2.0          |
+| Default della 1.x per il realm `memobrain` (audience, client, bucket, namespace delle metriche) | major dopo la 2.0          |
+| Ruolo admin `memobrain-admin` nel default di `OIDC_ADMIN_ROLES`                                 | major dopo la 2.0          |
+| Servizio gRPC `memobrain.v1.NotifyService` e `ingress.grpc.legacyPath`                          | major dopo la 2.0          |
+| Redirect `memobrain://` nei realm                                                               | major dopo la 2.0          |
 
-Le release di rimozione sono quelle scritte nei commenti del codice e in `scripts/rebrand/allowlist.tsv`; se cambiano, cambiano lì e qui. Le tre rimozioni che la 1.5.0 indicava per la **1.6** sono passate alla **1.7** (decisione del 2026-11-15): la 1.6.0 non toglie nulla e la 1.7.0 le esegue tutte e tre (ordine di aggiornamento in [Aggiornare alla 1.7](#aggiornare-alla-17)).
+Le release di rimozione sono quelle scritte nei commenti del codice e in `scripts/rebrand/allowlist.tsv`; se cambiano, cambiano lì e qui. Le tre rimozioni che la 1.5.0 indicava per la **1.6** sono passate alla **1.7** (decisione del 2026-11-15): la 1.6.0 non toglie nulla e la 1.7.0 le esegue tutte e tre (ordine di aggiornamento in [Aggiornare alla 1.7](#aggiornare-alla-17)). Le rimozioni indicate per la **2.0** sono passate a una release major successiva (decisione del 2026-11-27, ADR-0070): la 2.0.0 non toglie nulla.
 
 ## Rollback
 

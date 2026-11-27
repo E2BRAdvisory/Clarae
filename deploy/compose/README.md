@@ -63,7 +63,7 @@ KC_REALM=memobrain
 
 - Il nome del progetto prefissa i volumi (`memobrain-onprem_pgdata`): un altro nome ne creerebbe di vuoti.
 - Con `KC_REALM=memobrain` il Cloud Service mantiene da solo audience, client, bucket (`memobrain-blobs`, `memobrain-exports`) e namespace delle metriche della 1.x; non serve impostare altro. Se il realm è nuovo (`clarae`) ma i dati sono nei bucket della 1.x, `s3-init` e il servizio rifiutano di partire e dicono di impostare `S3_BUCKET_BLOBS=memobrain-blobs` (e `S3_BUCKET_EXPORTS=memobrain-exports`).
-- Le variabili `MEMOBRAIN_HOST`, `MEMOBRAIN_SITE`, `MEMOBRAIN_IMAGE`, `MEMOBRAIN_VERSION`, `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` valgono ancora se la `CLARAE_*` corrispondente non è impostata (rimosse nella 2.0).
+- Le variabili `MEMOBRAIN_HOST`, `MEMOBRAIN_SITE`, `MEMOBRAIN_IMAGE`, `MEMOBRAIN_VERSION`, `MEMOBRAIN_ALLOW_PLACEHOLDER_SECRETS` valgono ancora se la `CLARAE_*` corrispondente non è impostata (rimosse in una release major successiva alla 2.0, ADR-0070).
 
 La procedura completa, con Helm, Keycloak e metriche, è in [`docs/admin-guide/migrazione-clarae.md`](../../docs/admin-guide/migrazione-clarae.md).
 

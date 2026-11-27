@@ -4,7 +4,7 @@
 // api/proto/clarae/v1/notify.proto, the current contract: change that file first and keep the
 // two in step while this one exists. The server registers both services on the same handler
 // (services/cloud/internal/grpcserver). The directory stays memobrain/v1 because buf lint
-// (STANDARD) ties the directory to the package. Dropped in 2.0.
+// (STANDARD) ties the directory to the package. Dropped in a major release after 2.0 (ADR-0070).
 syntax = "proto3";
 
 package memobrain.v1;

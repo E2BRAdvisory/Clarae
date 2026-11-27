@@ -18,7 +18,7 @@ import (
 // (notifyServer.serve: authentication, replay, ordering, rate limits and shutdown are shared);
 // this adapter only converts the messages. The two protos are the same wire format by
 // construction (api/proto/memobrain/v1 is a copy of api/proto/clarae/v1) and a test compares
-// their descriptors. Dropped in 2.0 together with the legacy proto.
+// their descriptors. Dropped in a major release after 2.0 (ADR-0070) together with the legacy proto.
 
 func registerLegacy(s *grpc.Server, n *notifyServer) {
 	notifyv1legacy.RegisterNotifyServiceServer(s, &legacyNotifyServer{n: n})
