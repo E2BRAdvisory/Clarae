@@ -353,16 +353,21 @@ features:
   - id: sync.unsent
     title: File non inviati al cloud, con il motivo (ADR-0066)
     desktop:
-      status: partial
-      reason: 'solo il core (M26-S3): elenco e «Riprova» esistono come binding; il blocco «File non inviati» di Impostazioni › Sincronizzazione arriva con M26-S4'
+      status: yes
+      note: blocco «File non inviati» di Impostazioni › Sincronizzazione (M26-S4)
+      actions: [sync:retry-unsent]
       bindings: [SyncAPI.Unsent, SyncAPI.RetryUnsent]
     workbench:
-      status: partial
-      reason: 'solo il core (M26-S3): lo stesso codice Go gira nel core WASM, ma la UI e la prova sul web arrivano con M26-S4'
+      status: yes
+      note: le voci invalid-name e symlink non si presentano di fatto (il vault del browser non ha nomi del genere), ma il codice è lo stesso
     tests:
       desktop:
+        - packages/workbench/src/settings/SyncUnsent.test.tsx
+        - apps/desktop/frontend/e2e/sync-unsent.spec.ts
         - apps/desktop/internal/sync/unsent_test.go
         - apps/desktop/internal/vault/fs_test.go
+      workbench:
+        - apps/desktop/frontend/e2e/sync-unsent.spec.ts
 
   - id: conflicts
     title: Conflitti di sincronizzazione

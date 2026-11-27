@@ -298,6 +298,19 @@ const pauseSync = defineAction({
   run: (l: LinkRef) => onLink(l.vaultId, () => api.sync.setPaused(l.vaultId, !l.paused)),
 });
 
+/** The files to put back in the queue (none: every retryable one), as Settings › Sync lists them. */
+export interface UnsentRef {
+  vaultId: string;
+  paths: string[];
+}
+
+const retryUnsent = defineAction({
+  id: 'sync:retry-unsent',
+  feature: 'sync.unsent',
+  label: (r: UnsentRef) => (r.paths.length === 0 ? 'sync.unsent.retryAll' : 'sync.unsent.retry'),
+  run: (r: UnsentRef) => onLink(r.vaultId, () => api.sync.retryUnsent(r.vaultId, r.paths)),
+});
+
 const lockNow = defineAction({
   id: 'vault:lock',
   feature: 'crypto.unlock',
@@ -341,6 +354,7 @@ export const actions = [
   unlinkVault,
   removeFromBrowser,
   pauseSync,
+  retryUnsent,
   lockNow,
   signInAction,
   signOutAction,

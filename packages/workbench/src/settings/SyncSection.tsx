@@ -10,6 +10,7 @@ import { ActionButton, useAction } from '../ui/ActionButton';
 import { dialog } from '../ui/dialogs';
 import { PassphraseFields } from '../sync/PassphraseFields';
 import { RecoveryKeyStep } from '../sync/RecoveryKeyStep';
+import { SyncUnsent } from './SyncUnsent';
 
 const POLL_OPTIONS = [0, 30, 60, 300, 900];
 /** Idle minutes before a private vault locks itself (0 = never). */
@@ -271,6 +272,8 @@ export function SyncSection() {
         <ActionButton id="sync:unlink" arg={id} className="danger" />
         <ActionButton id="sync:remove-from-browser" arg="linked" className="danger" />
       </div>
+
+      <SyncUnsent vaultId={id} />
 
       {info.kind === 'private' && (
         <>

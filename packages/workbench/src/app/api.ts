@@ -161,6 +161,8 @@ export type SyncStatus = Omit<Plain<sync.Status>, 'phase' | 'lastSync'> & {
   lastSync: string;
 };
 export type SyncConflict = Omit<Plain<sync.Conflict>, 'createdAt'> & { createdAt: string };
+/** A file (or folder) this device does not send to the cloud, with the reason (ADR-0066). */
+export type UnsentItem = Plain<sync.UnsentItem>;
 export type RevisionInfo = Omit<Plain<sync.RevisionInfo>, 'time'> & { time: string };
 export type HistorySnapshot = Omit<Plain<localHistory.Snapshot>, 'time'> & { time: string };
 export type HistoryDeleted = Omit<Plain<localHistory.Deleted>, 'time'> & { time: string };
@@ -392,6 +394,11 @@ export const api = {
       SyncAPI.SetPollInterval(vaultId, seconds),
     syncNow: (vaultId: string): Promise<void> => SyncAPI.SyncNow(vaultId),
     conflicts: (vaultId: string): Promise<SyncConflict[]> => SyncAPI.Conflicts(vaultId),
+    /** What this device does not send to the cloud, grouped by reason (ADR-0066). */
+    unsent: (vaultId: string): Promise<UnsentItem[]> => SyncAPI.Unsent(vaultId),
+    /** Puts the parked files back in the queue (all of them with no paths) and starts a cycle. */
+    retryUnsent: (vaultId: string, paths: string[]): Promise<void> =>
+      SyncAPI.RetryUnsent(vaultId, paths),
     conflictTexts: (vaultId: string, id: number): Promise<ConflictTexts> =>
       SyncAPI.ConflictTexts(vaultId, id),
     resolveConflict: (

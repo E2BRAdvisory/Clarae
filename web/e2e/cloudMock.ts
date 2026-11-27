@@ -135,6 +135,11 @@ export interface CloudMock {
   readonly problems: string[];
   /** Deletes a vault "elsewhere" (the console, another device): later requests on it answer 404. */
   deleteVaultElsewhere(id: string): void;
+  /**
+   * Paths whose commit the server refuses, with the code and detail of the refusal (the files not
+   * sent, ADR-0066); a test removes a path to let the next commit through.
+   */
+  readonly rejectPaths: Map<string, { code: string; detail: string }>;
 }
 
 // ---- the contract ----------------------------------------------------------------------------
@@ -186,6 +191,7 @@ export async function installCloudMock(
   context: BrowserContext,
   seed: CloudSeed = {},
 ): Promise<CloudMock> {
+  const rejectPaths: CloudMock['rejectPaths'] = new Map();
   const state: CloudMock['state'] = {
     me: {
       id: ME,
@@ -403,6 +409,11 @@ export async function installCloudMock(
         const opId = op['op_id'] as string;
         const kind = op['op'] as string;
         const path = (op['path'] ?? op['to']) as string;
+        const refused = rejectPaths.get(path);
+        if (refused) {
+          results.push({ op_id: opId, status: 'rejected', ...refused });
+          continue;
+        }
         if (kind === 'create' || kind === 'modify' || kind === 'restore') {
           const prev = s.files.get(path);
           const f: StoredFile = {
@@ -668,6 +679,7 @@ export async function installCloudMock(
     state,
     calls,
     problems,
+    rejectPaths,
     deleteVaultElsewhere(id: string) {
       const v = state.vaults.find((x) => x.id === id);
       if (v) v.deleted_at = now();

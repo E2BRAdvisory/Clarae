@@ -57,6 +57,7 @@ import type {
   SyncLinkInfo,
   SyncStatus,
   TagCount,
+  UnsentItem,
   VaultInfo,
   WriteResult,
 } from '../../app/api';
@@ -89,6 +90,10 @@ export interface MockSync {
   disk: DiskEncryption;
   /** Passphrase and recovery key that unlock a cloud vault being linked on a new device. */
   secrets: Map<string, { passphrase: string; recoveryKey: string }>;
+  /** Per local vault id: what the device does not send (SyncAPI.Unsent, ADR-0066). */
+  unsent: Map<string, UnsentItem[]>;
+  /** The calls of SyncAPI.RetryUnsent, in order. */
+  retried: { vaultId: string; paths: string[] }[];
 }
 
 /**
@@ -337,6 +342,12 @@ function resolve(v: MockVault, from: string, target: string): string {
   return cands[0] ?? '';
 }
 
+/** Status.unsent as the core counts it: what calls for the user, not the informative entries nor
+ * the files waiting for a server change to merge (Engine.unsentCount). */
+export function unsentCount(items: UnsentItem[]): number {
+  return items.filter((it) => !it.info && it.reason !== 'awaiting-merge').length;
+}
+
 export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
   const handlers = new Map<string, Set<Handler>>();
   const mock: WailsMock = {
@@ -363,6 +374,8 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       usage: { used_bytes: 0, quota_bytes: 5 * 1024 ** 3, level: 'ok' },
       disk: 'encrypted',
       secrets: new Map(),
+      unsent: new Map(),
+      retried: [],
     },
     history: seed?.history ?? newMockHistory(),
     sharing: {
@@ -1326,9 +1339,24 @@ export function installWailsMock(seed?: Partial<WailsMock>): WailsMock {
       return Promise.resolve();
     },
     Conflicts: (id: string): Promise<SyncConflict[]> => Promise.resolve(sy.conflicts.get(id) ?? []),
-    // The list of the files not sent (ADR-0066): empty until a test needs entries.
-    Unsent: (_id: string) => Promise.resolve([]),
-    RetryUnsent: (_id: string, _paths: string[]): Promise<void> => Promise.resolve(),
+    // The list of the files not sent (ADR-0066), seeded by the tests in sync.unsent. Like the core,
+    // RetryUnsent puts back in the queue the retryable entries named (all of them with no paths),
+    // and the status counts what is left (the non-informative entries).
+    Unsent: (id: string): Promise<UnsentItem[]> => {
+      if (!linkOf(id).linked) return reject('this vault is not connected to the cloud');
+      return Promise.resolve((sy.unsent.get(id) ?? []).map((it) => ({ ...it })));
+    },
+    RetryUnsent: (id: string, paths: string[]): Promise<void> => {
+      if (!linkOf(id).linked) return reject('this vault is not connected to the cloud');
+      sy.retried.push({ vaultId: id, paths: [...paths] });
+      const left = (sy.unsent.get(id) ?? []).filter(
+        (it) => !it.retryable || (paths.length > 0 && !paths.includes(it.path)),
+      );
+      sy.unsent.set(id, left);
+      // The cycle RetryUnsent starts ends with a new lastSync, as in the core.
+      setStatus(id, { unsent: unsentCount(left), lastSync: new Date().toISOString() });
+      return Promise.resolve();
+    },
     // Like the core, ConflictTexts remembers the version of the file it showed, and keep-local and
     // merged refuse with a conflict error once the file holds another one (a test changes
     // conflictTexts' currentHash to simulate an edit made after the texts were read).

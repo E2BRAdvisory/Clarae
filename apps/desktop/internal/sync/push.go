@@ -546,6 +546,19 @@ func (e *Engine) applyResult(ctx context.Context, p prepared, res syncproto.OpRe
 	}
 }
 
+// retryOrPark counts one more attempt of a refusal that may pass on retry (a blob the server lost, a
+// path taken meanwhile), keeping the code so the list of the files not sent shows it as being tried
+// again, and parks the file once the attempts are used up: a row stopped with an empty LastError
+// would be neither listed nor retryable (ADR-0066).
+func (e *Engine) retryOrPark(ctx context.Context, row File, res syncproto.OpResult) (bool, error) {
+	row.Attempts++
+	if row.Attempts >= MaxAttempts {
+		return false, e.park(ctx, row, string(res.Code), res.Detail)
+	}
+	row.LastError = lastError(string(res.Code), res.Detail)
+	return true, e.cfg.DB.PutFile(ctx, row)
+}
+
 func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncproto.OpResult) (bool, error) {
 	switch res.Code {
 	case syncproto.CodePathCollision:
@@ -556,8 +569,7 @@ func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncpro
 		}
 		_ = e.cfg.DB.DeleteOutbox(ctx, row.Path)
 		row.Path = np
-		row.Attempts++
-		return true, e.cfg.DB.PutFile(ctx, row)
+		return e.retryOrPark(ctx, row, res)
 	case syncproto.CodeQuotaExceeded:
 		e.mu.Lock()
 		e.stop = fmt.Errorf("storage quota exceeded: %s", res.Detail)
@@ -565,8 +577,7 @@ func (e *Engine) rejected(ctx context.Context, p prepared, row File, res syncpro
 		return false, nil
 	case syncproto.CodeBlobMissing:
 		_ = e.cfg.DB.DeleteOutbox(ctx, row.Path)
-		row.Attempts++
-		return row.Attempts < MaxAttempts, e.cfg.DB.PutFile(ctx, row)
+		return e.retryOrPark(ctx, row, res)
 	case syncproto.CodeShareRootMove:
 		return e.shareRootMove(ctx, p, row, res)
 	case syncproto.CodeNotFound:

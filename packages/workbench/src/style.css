@@ -1197,6 +1197,26 @@ button.record.active {
   background: var(--accent);
   color: var(--accent-contrast);
 }
+/* Settings › Sync, «Files not sent» (SyncUnsent.tsx, ADR-0066) */
+.sync-unsent h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+.unsent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.unsent-list li {
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.unsent-list code {
+  overflow-wrap: anywhere;
+}
+.sync-unsent details {
+  margin-top: 12px;
+}
 
 /* ---- editor: Source highlighting (sourceMode.ts) ---- */
 .cm-hl-strong {

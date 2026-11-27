@@ -788,7 +788,28 @@
     "quarantinedN_one": "{{count}} file nel cloud non è leggibile su questo dispositivo",
     "quarantinedN_other": "{{count}} file nel cloud non sono leggibili su questo dispositivo",
     "quarantinedHint": "Il loro nome cifrato non si apre con la chiave di questo vault, quindi restano intatti: non vengono scaricati, non sono mai considerati cancellazioni e si riprova a ogni sincronizzazione. Se il numero non scende, vedi il log.",
-    "conflictChanged": "Il file è cambiato dopo che questo conflitto è stato mostrato: le versioni qui sotto sono state ricaricate. Rivedile e scegli di nuovo."
+    "conflictChanged": "Il file è cambiato dopo che questo conflitto è stato mostrato: le versioni qui sotto sono state ricaricate. Rivedile e scegli di nuovo.",
+    "unsent": {
+      "title": "File non inviati",
+      "empty": "Tutti i file sono stati inviati.",
+      "retry": "Riprova",
+      "retryFile": "Riprova {{path}}",
+      "retryAll": "Riprova tutti",
+      "excludedTitle_one": "Cartelle escluse ({{count}})",
+      "excludedTitle_other": "Cartelle escluse ({{count}})",
+      "hint": "Non si sincronizzano mai: le cartelle dei sistemi di versione (.git, .hg, .svn, .bzr, .jj), il cestino del vault, i file di sistema come .DS_Store e Thumbs.db, i file temporanei e i dati locali del dispositivo in .clarae. I file di sistema, i temporanei e i dati locali non sono elencati qui.",
+      "reason_too-large": "Troppo grandi",
+      "reason_encrypt-failed": "Cifratura non riuscita",
+      "reason_share-root-move": "Spostamento che svuoterebbe una cartella condivisa",
+      "reason_rejected": "Rifiutati dal server",
+      "reason_retrying": "In errore, si riprova",
+      "reason_too-many-conflicts": "Troppe modifiche concorrenti: risolvi i conflitti",
+      "reason_awaiting-merge": "In attesa di unire una modifica del server",
+      "reason_invalid-name": "Nome non valido: rinomina il file",
+      "reason_symlink": "Collegamenti simbolici (mai seguiti)",
+      "reason_vcs": "Repository di un sistema di versione",
+      "reason_trash": "Cestino del vault"
+    }
   },
   "drawing": {
     "loading": "Caricamento dell'editor di disegni…",

@@ -93,13 +93,18 @@ func TestMoveToExcludedPathStillDeletes(t *testing.T) {
 type rejectingRemote struct {
 	memRemote
 	path string
+	code syncproto.Code // PATH_INVALID when empty
 }
 
 func (r *rejectingRemote) Commit(ctx context.Context, req syncproto.CommitRequest) (syncproto.CommitResponse, error) {
 	resp := syncproto.CommitResponse{}
 	for i, op := range req.Ops {
 		if op.Path == r.path {
-			resp.Results = append(resp.Results, syncproto.OpResult{OpID: op.OpID, Status: syncproto.StatusRejected, Code: syncproto.CodePathInvalid, Detail: "refused by the test"})
+			code := r.code
+			if code == "" {
+				code = syncproto.CodePathInvalid
+			}
+			resp.Results = append(resp.Results, syncproto.OpResult{OpID: op.OpID, Status: syncproto.StatusRejected, Code: code, Detail: "refused by the test"})
 			continue
 		}
 		r.committed = append(r.committed, op.Path)
@@ -229,6 +234,36 @@ func TestUnsentAwaitingMergeAndConflict(t *testing.T) {
 	}
 	if n, err := e.RetryUnsent(ctx, nil); err != nil || n != 0 {
 		t.Fatalf("retry touched a conflict: %d %v", n, err)
+	}
+}
+
+// A refusal that may pass on retry (BLOB_MISSING) is listed as being tried again while attempts are
+// left, then parked with its code: listed, counted and put back in the queue by «Retry».
+func TestUnsentBlobMissingIsParkedVisibly(t *testing.T) {
+	ctx := context.Background()
+	e, dir := newTestEngine(t, &rejectingRemote{path: "gone.md", code: syncproto.CodeBlobMissing}, 0)
+	writeFile(t, dir, "gone.md", []byte("# lost blob"))
+	if err := e.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < MaxAttempts && parked(t, e, "gone.md").Attempts < MaxAttempts; i++ {
+		if got := unsentByPath(t, e)["gone.md"]; got.Reason != UnsentRetrying || got.Code != string(syncproto.CodeBlobMissing) {
+			t.Fatalf("attempt %d: %+v", i, got)
+		}
+		if err := e.Sync(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := unsentByPath(t, e)["gone.md"]
+	want := UnsentItem{Path: "gone.md", Reason: UnsentRejected, Code: string(syncproto.CodeBlobMissing), Detail: "refused by the test", Retryable: true}
+	if got != want {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+	if n := e.unsentCount(ctx); n != 1 {
+		t.Fatalf("unsentCount = %d, want 1", n)
+	}
+	if n, err := e.RetryUnsent(ctx, nil); err != nil || n != 1 {
+		t.Fatalf("retry: %d %v", n, err)
 	}
 }
 

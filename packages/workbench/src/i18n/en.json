@@ -788,7 +788,28 @@
     "quarantinedN_one": "{{count}} file in the cloud cannot be read on this device",
     "quarantinedN_other": "{{count}} files in the cloud cannot be read on this device",
     "quarantinedHint": "Their encrypted name does not open with the key of this vault, so they are left alone: they are not downloaded, are never taken as deletions and are tried again at every sync. If the number does not go down, see the log.",
-    "conflictChanged": "The file changed after this conflict was shown: the versions below have been reloaded. Review them and choose again."
+    "conflictChanged": "The file changed after this conflict was shown: the versions below have been reloaded. Review them and choose again.",
+    "unsent": {
+      "title": "Files not sent",
+      "empty": "All files have been sent.",
+      "retry": "Try again",
+      "retryFile": "Try again {{path}}",
+      "retryAll": "Try all again",
+      "excludedTitle_one": "Excluded folders ({{count}})",
+      "excludedTitle_other": "Excluded folders ({{count}})",
+      "hint": "Never synced: the folders of version control systems (.git, .hg, .svn, .bzr, .jj), the vault trash, system files such as .DS_Store and Thumbs.db, temporary files and the device-local data in .clarae. System, temporary and device-local files are not listed here.",
+      "reason_too-large": "Too large",
+      "reason_encrypt-failed": "Encryption failed",
+      "reason_share-root-move": "A move that would empty a shared folder",
+      "reason_rejected": "Refused by the server",
+      "reason_retrying": "Failing, being tried again",
+      "reason_too-many-conflicts": "Too many concurrent edits: resolve the conflicts",
+      "reason_awaiting-merge": "Waiting to merge a change from the server",
+      "reason_invalid-name": "Invalid name: rename the file",
+      "reason_symlink": "Symbolic links (never followed)",
+      "reason_vcs": "Repository of a version control system",
+      "reason_trash": "Vault trash"
+    }
   },
   "drawing": {
     "loading": "Loading the drawing editor…",

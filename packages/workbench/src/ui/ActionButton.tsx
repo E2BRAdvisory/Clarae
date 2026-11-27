@@ -66,6 +66,8 @@ type ActionButtonProps<Id extends ActionId> = {
   onPending?: (pending: boolean) => void;
   /** Replaces the action's label. */
   children?: ReactNode;
+  /** The accessible name, when the visible text alone does not say what it acts on (one «Retry» per file). */
+  ariaLabel?: string;
 } & ArgProp<Id>;
 
 export function ActionButton<Id extends ActionId>(props: ActionButtonProps<Id>) {
@@ -88,6 +90,7 @@ export function ActionButton<Id extends ActionId>(props: ActionButtonProps<Id>) 
       type="button"
       className={props.className}
       data-action-id={props.id}
+      aria-label={props.ariaLabel}
       disabled={pending || !bound.enabled || props.disabled}
       onClick={() => void click()}
     >

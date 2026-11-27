@@ -108,7 +108,7 @@ Le tabelle qui sotto si rigenerano con `node scripts/parity.mjs`: per funzione, 
 
 ### Funzioni (99)
 
-Dal registro `shared/parity/features.yaml`. Desktop: yes 88, partial 1, exception 2, console-only 7, missing 1. Workbench: yes 55, partial 22, exception 13, console-only 8, missing 1. Console: yes 28, n/a 71 (n/a = funzione sul contenuto del vault, che la console affida al workbench). Test per superficie: D = desktop (UI, e2e sul mock, core Go), W = workbench (host web, spec nel browser, spec della matrice e2e e test della UI sul core in Node, `*.core.test.tsx`), K = console, C = cloud; in grassetto le prove sul core WebAssembly. 60 funzioni hanno almeno una prova sul core; 19 sono `partial` soltanto per la mancanza di una prova (motivazione «non verificata sul web: …»).
+Dal registro `shared/parity/features.yaml`. Desktop: yes 89, exception 2, console-only 7, missing 1. Workbench: yes 56, partial 21, exception 13, console-only 8, missing 1. Console: yes 28, n/a 71 (n/a = funzione sul contenuto del vault, che la console affida al workbench). Test per superficie: D = desktop (UI, e2e sul mock, core Go), W = workbench (host web, spec nel browser, spec della matrice e2e e test della UI sul core in Node, `*.core.test.tsx`), K = console, C = cloud; in grassetto le prove sul core WebAssembly. 61 funzioni hanno almeno una prova sul core; 19 sono `partial` soltanto per la mancanza di una prova (motivazione «non verificata sul web: …»).
 
 | Funzione | Desktop | Workbench | Console | Motivazione e note | Test |
 | --- | --- | --- | --- | --- | --- |
@@ -126,7 +126,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 88, partial 1, exceptio
 | `sync.link` Collegamento di un vault locale a un vault cloud | yes | yes | n/a | workbench (nota): sul web il collegamento avviene da solo all'apertura del vault (web/src/workbench/launch.ts) | D: `sync.test.tsx`, `manager_test.go` · W: **`web-sync.spec.ts`** |
 | `sync.unlink` Scollegamento di un vault dal cloud | yes | exception | n/a | workbench: la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare | D: `sync.test.tsx`, `copies_test.go` · W: `guard.test.ts`, `forget.test.ts` · K: `ForgetBrowser.test.tsx` |
 | `sync.engine` Sincronizzazione del vault (stato, pausa, sincronizza ora) | yes | yes | n/a | desktop (nota): Impostazioni › Sync mostra quanti file del cloud il dispositivo non riesce a leggere (quarantena, ADR-0039) — workbench (nota): le modifiche fatte offline restano in coda finché la scheda è aperta (ADR-0029) | D: `sync.test.tsx`, `e2e_test.go`, `push_test.go`, `scan_test.go` · W: **`web-sync.spec.ts`**, **`mixed.spec.ts`** · C: `sync_test.go`, `tus_test.go` |
-| `sync.unsent` File non inviati al cloud, con il motivo (ADR-0066) | partial | partial | n/a | desktop: solo il core (M26-S3): elenco e «Riprova» esistono come binding; il blocco «File non inviati» di Impostazioni › Sincronizzazione arriva con M26-S4 — workbench: solo il core (M26-S3): lo stesso codice Go gira nel core WASM, ma la UI e la prova sul web arrivano con M26-S4 | D: `unsent_test.go`, `fs_test.go` |
+| `sync.unsent` File non inviati al cloud, con il motivo (ADR-0066) | yes | yes | n/a | desktop (nota): blocco «File non inviati» di Impostazioni › Sincronizzazione (M26-S4) — workbench (nota): le voci invalid-name e symlink non si presentano di fatto (il vault del browser non ha nomi del genere), ma il codice è lo stesso | D: `SyncUnsent.test.tsx`, `sync-unsent.spec.ts`, `unsent_test.go`, `fs_test.go` · W: **`sync-unsent.spec.ts`** |
 | `conflicts` Conflitti di sincronizzazione | yes | yes | n/a | desktop (nota): se il file cambia dopo che le versioni sono state mostrate, «Tieni la mia» e la fusione non scrivono nulla, le versioni si ricaricano e un avviso chiede di scegliere di nuovo — workbench (nota): dal browser è provata solo la fusione di un `.md`, non la copia di conflitto di `.canvas` ed `.excalidraw` | D: `sync.test.tsx`, `diff.test.ts`, `e2e_drawings_test.go` · W: **`web-sync.spec.ts`** |
 | `revisions` Storico delle revisioni nel cloud | yes | partial | n/a | workbench: non verificata sul web: nessun test apre lo storico delle revisioni dal browser; la UI e il codice Go sono quelli del desktop | D: `sync.test.tsx` · C: `history_test.go`, `retention_test.go` |
 | `history.local` Storico locale delle note | yes | yes | n/a |  | D: `recovery.test.tsx`, `history_test.go`, `bindings_history_test.go` · W: **`workbench.spec.ts`** |
@@ -433,7 +433,7 @@ Dal registro `shared/parity/features.yaml`. Desktop: yes 88, partial 1, exceptio
 | `drawing:import-legacy` | editor | yes | `drawing.legacy` |  |
 | `drawing:edit-latex` | editor | yes | `drawing.latex-mermaid` |  |
 
-### Azioni dei pannelli (13)
+### Azioni dei pannelli (14)
 
 I pulsanti dei pannelli che non sono comandi ma realizzano una funzione (`defineAction` in `packages/workbench/src/commands/actions.ts`, mostrati da `<ActionButton>`, ADR-0045 §2). Come i comandi nominano la loro funzione e le capability che richiedono (`requires`) o di cui fanno le veci dove mancano (`excludes`); l'elenco viene dal registro a runtime.
 
@@ -449,6 +449,7 @@ I pulsanti dei pannelli che non sono comandi ma realizzano una funzione (`define
 | `sync:unlink` | yes | no (needs `unlinkVault`) | `sync.unlink` |
 | `sync:remove-from-browser` | no (only without `unlinkVault`) | yes | `sync.unlink` |
 | `sync:pause` | yes | yes | `sync.engine` |
+| `sync:retry-unsent` | yes | yes | `sync.unsent` |
 | `vault:lock` | yes | yes | `crypto.unlock` |
 | `account:sign-in` | yes | no (needs `ownsSession`) | `account.session` |
 | `account:sign-out` | yes | no (needs `ownsSession`) | `account.session` |
@@ -553,7 +554,7 @@ Il dispatcher del core espone tutti i 174 metodi (verificato da `TestDispatcherM
 | `SyncAPI.ResolveConflict` | `conflicts` | — |  |
 | `SyncAPI.RestoreCloudVault` | `vault.restore` | — |  |
 | `SyncAPI.RestoreRevision` | `revisions` | — | non verificata sul web: nessun test apre lo storico delle revisioni dal browser; la UI e il codice Go sono quelli del desktop |
-| `SyncAPI.RetryUnsent` | `sync.unsent` | — | solo il core (M26-S3): lo stesso codice Go gira nel core WASM, ma la UI e la prova sul web arrivano con M26-S4 |
+| `SyncAPI.RetryUnsent` | `sync.unsent` | — |  |
 | `SyncAPI.RevisionText` | `revisions` | — | non verificata sul web: nessun test apre lo storico delle revisioni dal browser; la UI e il codice Go sono quelli del desktop |
 | `SyncAPI.RevokeDevice` | `devices` | — |  |
 | `SyncAPI.SetPaused` | `sync.engine` | yes |  |
@@ -561,7 +562,7 @@ Il dispatcher del core espone tutti i 174 metodi (verificato da `TestDispatcherM
 | `SyncAPI.Status` | `sync.engine` | yes |  |
 | `SyncAPI.SyncNow` | `sync.engine` | yes |  |
 | `SyncAPI.Unlink` | `sync.unlink` | — | la copia nel browser appartiene al vault cloud e il lancio la ricollegherebbe; al posto di «Scollega» c'è «Rimuovi da questo browser», che carica le modifiche e cancella la copia quando il core la dice cancellabile (SyncAPI.CopyVerdict, web/src/workbench/guard.ts); uscire dal vault carica le modifiche e lascia nel marcatore ciò che resta, così «Esci» e «Dimentica questo browser» lo chiedono prima di cancellare |
-| `SyncAPI.Unsent` | `sync.unsent` | — | solo il core (M26-S3): lo stesso codice Go gira nel core WASM, ma la UI e la prova sul web arrivano con M26-S4 |
+| `SyncAPI.Unsent` | `sync.unsent` | — |  |
 | `SyncAPI.Usage` | `usage` | — |  |
 | `TagsAPI.List` | `tags` | yes | non verificata sul web: nessun test, né sul desktop né sul web; la UI e il codice Go sono quelli del desktop |
 | `TemplatesAPI.Create` | `templates` | — | non verificata sul web: nessun test usa i modelli sul core WebAssembly; la UI e il codice Go sono quelli del desktop |
@@ -724,9 +725,9 @@ Da `api/openapi.yaml`. **68 su 83** sono chiamate dalla console (`web/src`); le 
 | `getExport` | GET `/vaults/{vaultId}/exports/{exportId}` | `export.zip` | yes |
 | `downloadExport` | GET `/vaults/{vaultId}/exports/{exportId}/download` | `export.zip` | — |
 
-### Spec e2e per target (46)
+### Spec e2e per target (47)
 
-Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **36** interi, **7** in parte, **3** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
+Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matrice (`web/playwright.workbench-ui.config.ts`: `desktop-mock` = UI sul mock Wails, `web-core` = workbench sul core WebAssembly). Sul web: **37** interi, **7** in parte, **3** esclusi; `opt-in` = benchmark che girano solo con la loro variabile d'ambiente. Un'esclusione si dichiara con `skipOnWeb(<funzione>, <motivo>)`; i test sono contati nel sorgente (un ciclo conta una volta).
 
 | Spec | Test | Desktop (mock) | Web (core) | Esclusioni sul web |
 | --- | --- | --- | --- | --- |
@@ -771,6 +772,7 @@ Gli spec di `apps/desktop/frontend/e2e` girano su entrambi i target della matric
 | `apps/desktop/frontend/e2e/sharing.spec.ts` | 2 | yes | yes | — |
 | `apps/desktop/frontend/e2e/slides.spec.ts` | 3 | yes | yes | — |
 | `apps/desktop/frontend/e2e/status-bar.spec.ts` | 1 | yes | yes | — |
+| `apps/desktop/frontend/e2e/sync-unsent.spec.ts` | 1 | yes | yes | — |
 | `apps/desktop/frontend/e2e/templates.spec.ts` | 5 | yes | yes | — |
 | `apps/desktop/frontend/e2e/terminal.spec.ts` | 12 | yes | partial (1 of 12 skipped) | `terminal` (un test): the browser cannot start processes: the workbench has no terminal |
 | `apps/desktop/frontend/e2e/ui-perf.spec.ts` | 2 | opt-in | no | `files.explorer`: the harness seeds 10 000 notes into the Wails mock and its budgets are calibrated on it (docs/qa) |
