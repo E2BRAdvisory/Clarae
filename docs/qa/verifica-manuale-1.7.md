@@ -2,7 +2,7 @@
 
 Un solo documento per le prove che nessuna suite automatica può fare e che esegue chi possiede il Mac: le voci 2, 3 e 11 del piano della 1.7.1 (`.claude/roadmap/m20-versione-1-7-1.md`). Il runbook **non ripete** le checklist: dice come preparare l'ambiente, in che ordine eseguirle, che cosa misurare nel grafo 3D e dove scrivere gli esiti.
 
-**Stato al 2026-11-15: nessuna prova di questo runbook è stata eseguita.** I comandi sono stati letti su `Taskfile.yml`, su `scripts/` e sul codice, ma nessun passaggio che apre una finestra è stato provato per scriverlo: ciò che non si è potuto controllare è segnato **(non verificato)**. Le novità della 1.7.1 che toccano le prove sono descritte dove servono: il selettore rapido con i file `.webapp` (blocco C), il livello intermedio del grafo 3D (sezioni 2.1, 2.4 e 2.5) e il driver Windows sperimentale (sezione 5.1).
+**Eseguito dall'owner il 2026-11-27: runbook terminato con esito positivo (dichiarato, senza esito per riga).** Non sono stati trasmessi gli esiti di ogni caso né i valori delle misure del grafo 3D: il «Registro delle misure del 3D» resta vuoto. **Stato precedente, al 2026-11-15: nessuna prova di questo runbook era stata eseguita.** I comandi sono stati letti su `Taskfile.yml`, su `scripts/` e sul codice, ma nessun passaggio che apre una finestra è stato provato per scriverlo: ciò che non si è potuto controllare è segnato **(non verificato)**. Le novità della 1.7.1 che toccano le prove sono descritte dove servono: il selettore rapido con i file `.webapp` (blocco C), il livello intermedio del grafo 3D (sezioni 2.1, 2.4 e 2.5) e il driver Windows sperimentale (sezione 5.1).
 
 **Che cosa si prova**
 
@@ -445,9 +445,9 @@ Un Mac con macOS 13 esegue la build universale costruita qui: `task build-deskto
 
 Una riga per sessione di prova (anche interrotta).
 
-| Data | Blocco | Sistema e versione | Build (hash, sviluppo o produzione) | Esecutore | Casi eseguiti (ok / ko / n/d) | Difetti e schermate |
-| ---- | ------ | ------------------ | ----------------------------------- | --------- | ----------------------------- | ------------------- |
-|      |        |                    |                                     |           |                               |                     |
+| Data       | Blocco | Sistema e versione | Build (hash, sviluppo o produzione) | Esecutore | Casi eseguiti (ok / ko / n/d)                                        | Difetti e schermate |
+| ---------- | ------ | ------------------ | ----------------------------------- | --------- | -------------------------------------------------------------------- | ------------------- |
+| 2026-11-27 | tutti  | non annotato       | non annotata                        | owner     | runbook terminato, esito positivo (dichiarato, senza esito per riga) | nessuno dichiarato  |
 
 ## Registro delle misure del 3D
 

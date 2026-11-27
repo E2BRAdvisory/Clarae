@@ -18,11 +18,11 @@
 Scaricare l'installer dalla pagina [Releases](https://github.com/E2BR/MemoBrain/releases) e verificarlo
 con `SHA256SUMS` (`sha256sum -c SHA256SUMS`).
 
-| Sistema | Pacchetto                                 | Requisiti                          |
-| ------- | ----------------------------------------- | ---------------------------------- |
-| macOS   | `.dmg` universale (Apple Silicon e Intel) | trascinare l'app in _Applicazioni_ |
-| Windows | installer NSIS (amd64)                    | Windows 10/11 con WebView2 Runtime |
-| Linux   | `.deb` o AppImage (amd64)                 | `webkit2gtk-4.1`                   |
+| Sistema | Pacchetto                                                                                              | Requisiti                          |
+| ------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| macOS   | `.dmg` universale (Apple Silicon; la parte Intel è inclusa ma non provata né supportata ufficialmente) | trascinare l'app in _Applicazioni_ |
+| Windows | installer NSIS (amd64)                                                                                 | Windows 10/11 con WebView2 Runtime |
+| Linux   | `.deb` o AppImage (amd64)                                                                              | `webkit2gtk-4.1`                   |
 
 Gli installer al momento **non sono firmati**: al primo avvio Gatekeeper (macOS) o SmartScreen (Windows)
 chiedono conferma. Non c'è un installer per Windows arm64 (tolto nella 1.2.3) né per Linux arm64, e

@@ -47,7 +47,7 @@ Oggi un dispositivo revocato dalla console fa rispondere al `commit` `403 FORBID
 
 - Integrazione cloud (testcontainers): registrare, revocare e registrare di nuovo con lo stesso hostname restituisce lo stesso `id` e non duplica; lo stesso hostname su piattaforme diverse dà due righe; la migrazione su dati con duplicati lascia un solo dispositivo attivo per gruppo e conserva le righe; il replay dell'`Idempotency-Key` continua a funzionare.
 - Unit desktop: `Logout` ferma la sync, chiama la revoca prima di cancellare la sessione e prosegue se la rete fallisce o l'identity provider rifiuta (`logout_test.go`); `CLARAE_DEVICE_NAME` prevale sul nome del computer.
-- `task test-desktop-e2e`: i dispositivi dei test portano nomi diversi (`uniqueDeviceName`), quindi restano due. **Non provato in automatico:** logout e login contro il cloud vero senza dispositivi doppi, e due istanze con `CLARAE_DEVICE_NAME` diversi: sono casi manuali del runbook [`m21-correttivi.md`](../qa/m21-correttivi.md).
+- `task test-desktop-e2e`: i dispositivi dei test portano nomi diversi (`uniqueDeviceName`), quindi restano due. **Non provato in automatico:** logout e login contro il cloud vero senza dispositivi doppi, e due istanze con `CLARAE_DEVICE_NAME` diversi: sono casi manuali del runbook [`m21-correttivi.md`](../qa/m21-correttivi.md), terminato dall'owner il 2026-11-27 con esito positivo dichiarato, senza esito per riga.
 
 ## Alternative considerate
 

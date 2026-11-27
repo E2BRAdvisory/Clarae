@@ -59,4 +59,4 @@ Il predicato di ADR-0047 esiste già: `openTarget(path)` (`packages/workbench/sr
 - Rinominare non può più cambiare il tipo di un file supportato; per farlo servono il file system o un altro comando. Chi vuole davvero un'altra estensione non ha un modo dall'app: limite dichiarato.
 - Per i file non supportati nulla cambia.
 - Un utente abituato a digitare l'estensione continua a funzionare (non si raddoppia).
-- Da verificare a mano, con il runbook [`docs/qa/m22-nomi-file-e-applicazioni.md`](../qa/m22-nomi-file-e-applicazioni.md): l'esploratore su un vault reale (`Desktop_UI`, `SlideClarae`, `SATAP` senza estensione) e la rinomina con F2 su un disegno, un canvas, una presentazione e un file non supportato.
+- Verifica a mano, con il runbook [`docs/qa/m22-nomi-file-e-applicazioni.md`](../qa/m22-nomi-file-e-applicazioni.md): l'esploratore su un vault reale (`Desktop_UI`, `SlideClarae`, `SATAP` senza estensione) e la rinomina con F2 su un disegno, un canvas, una presentazione e un file non supportato. **Eseguita dall'owner il 2026-11-27: esito positivo, dichiarato senza esito per riga.**

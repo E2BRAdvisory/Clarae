@@ -42,7 +42,7 @@ Per rieseguire: `scripts/build-desktop-bin.sh --version 1.3.5-qa`, poi `MEMOBRAI
 
 ### Ancora da eseguire
 
-Windows 11, Ubuntu 22.04 e 24.04 e macOS Intel: nessuna prova (le righe sotto e il registro in §4 restano da compilare). Su macOS arm64 restano manuali la finestra nativa, il drop dei file, i dialoghi, il giro di chiusura con nota sporca (20 prove), i deep link a freddo e a caldo e l'installazione sopra la 1.3.4 (§1.1).
+Windows 11, Ubuntu 22.04 e 24.04: nessuna prova automatica; dal 2026-11-27 la matrice manuale è eseguita dall'owner con esito positivo dichiarato, senza esito per riga (le righe sotto e il registro in §4 restano senza dettaglio). macOS Intel: non provato, non supportato ufficialmente; il `.dmg` universal contiene comunque la parte x86_64. Su macOS arm64 restano manuali la finestra nativa, il drop dei file, i dialoghi, il giro di chiusura con nota sporca (20 prove), i deep link a freddo e a caldo e l'installazione sopra la 1.3.4 (§1.1).
 
 ## 0. Costruire i binari da provare
 
@@ -186,12 +186,12 @@ Esito atteso: l'aggiornamento riesce sui tre sistemi operativi senza perdere car
 
 ## 4. Registro dell'esito
 
-**2026-11-27 — Windows e Linux.** Eseguita dall'owner il 2026-11-27: esito positivo (dichiarato, senza esito per riga). Le righe della tabella restano vuote: l'owner non ha trasmesso data, versione e livello dei difetti sistema per sistema. macOS (Intel) non è dichiarato.
+**2026-11-27 — Windows e Linux.** Eseguita dall'owner il 2026-11-27: esito positivo (dichiarato, senza esito per riga). Le righe della tabella restano vuote: l'owner non ha trasmesso data, versione e livello dei difetti sistema per sistema. macOS (Intel): non provato, non supportato ufficialmente; il `.dmg` universal contiene comunque la parte x86_64: esce dalla matrice di prova.
 
-| Sistema operativo    | Data | Chi | Versione provata | P0  | P1  | P2  | Note |
-| -------------------- | ---- | --- | ---------------- | --- | --- | --- | ---- |
-| macOS (arm64)        |      |     |                  |     |     |     |      |
-| macOS (Intel)        |      |     |                  |     |     |     |      |
-| Windows 11 (amd64)   |      |     |                  |     |     |     |      |
-| Ubuntu 22.04 (amd64) |      |     |                  |     |     |     |      |
-| Ubuntu 24.04 (amd64) |      |     |                  |     |     |     |      |
+| Sistema operativo    | Data | Chi | Versione provata | P0  | P1  | P2  | Note                                                                                             |
+| -------------------- | ---- | --- | ---------------- | --- | --- | --- | ------------------------------------------------------------------------------------------------ |
+| macOS (arm64)        |      |     |                  |     |     |     |                                                                                                  |
+| macOS (Intel)        |      |     |                  |     |     |     | non provato, non supportato ufficialmente; il `.dmg` universal contiene comunque la parte x86_64 |
+| Windows 11 (amd64)   |      |     |                  |     |     |     |                                                                                                  |
+| Ubuntu 22.04 (amd64) |      |     |                  |     |     |     |                                                                                                  |
+| Ubuntu 24.04 (amd64) |      |     |                  |     |     |     |                                                                                                  |

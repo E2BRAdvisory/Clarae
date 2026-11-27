@@ -1,6 +1,6 @@
 # Accessibilità
 
-Lo stato dei controlli e le procedure di verifica sono in `docs/qa/a11y-desktop.md` e `docs/qa/a11y-web.md`. Non dichiariamo conformità WCAG: i controlli automatici (axe) non rilevano problemi gravi nelle schermate coperte, e restano da completare le verifiche manuali con screen reader reali.
+Lo stato dei controlli e le procedure di verifica sono in `docs/qa/a11y-desktop.md` e `docs/qa/a11y-web.md`. Non dichiariamo conformità WCAG: i controlli automatici (axe) non rilevano problemi gravi nelle schermate coperte, e restano da completare le verifiche manuali con screen reader reali, salvo l'editor Live, provato con lettori di schermo sulle tre WebView dall'owner il 2026-11-27 (esito positivo dichiarato, senza esito per riga).
 
 ## Tastiera
 

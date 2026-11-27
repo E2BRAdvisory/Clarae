@@ -2,7 +2,7 @@
 
 Prove a mano per ciò che le suite automatiche non vedono: l'esploratore su un vault vero e, per le applicazioni, la finestra reale di Windows e di Linux. Il lavoro è descritto in [roadmap §13-quindecies](../roadmap.md#13-quindecies-m22--applicazioni-integrate-su-windows-e-linux-nomi-dei-file-senza-estensione) e negli ADR [0062](../adr/0062-vista-integrata-windows-linux.md) e [0063](../adr/0063-nomi-file-senza-estensione.md), **entrambi accettati il 2026-11-20** (recepiti in `Specifications.md` v1.8 il 2026-11-20; [`spec-v1.8-proposta.md`](../spec-v1.8-proposta.md) resta come storia).
 
-**Stato al 2026-11-19: nessun caso di questo runbook è stato eseguito.** I nomi e i comandi sono stati letti sul codice e su `Taskfile.yml`. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1 o P2) oppure `n/d`, con data, sistema e versione, nel registro in fondo.
+**Eseguito dall'owner il 2026-11-27: runbook terminato con esito positivo (dichiarato, senza esito per riga)**, per i nomi dei file (N1…N13) e per le applicazioni su Windows e Linux (matrice m18). La colonna «Esito» resta vuota: l'owner non ha trasmesso sistema, versione e esito di ogni caso. **Stato precedente, al 2026-11-19: nessun caso di questo runbook era stato eseguito.** I nomi e i comandi sono stati letti sul codice e su `Taskfile.yml`. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1 o P2) oppure `n/d`, con data, sistema e versione, nel registro in fondo.
 
 ## Che cosa coprono già le prove automatiche
 
@@ -48,7 +48,7 @@ Si eseguono i casi della [matrice](m18-webview-matrice.md): **sezione 2** (WE1�
 1. Windows con il runtime: WE1, WE4, WE5, WE6, WE17, WE19.
 2. Windows senza il runtime (o con `CLARAE_WEBVIEW=off`): WE2, WE24, W1…W3.
 3. Linux, X11 e Wayland: LE1, LE2, LE3, LE4, LE8, LE9, LE10, LE19.
-4. Linux, ripiego e ambienti: LE27 (senza `bwrap`), LE28 (variabile che disattiva la sandbox), LE29 (Flatpak e Snap), LE30 e LE31 (redirect e iframe), LE32.
+4. Linux, ripiego e ambienti: LE27 (senza `bwrap`), LE28 (variabile che disattiva la sandbox), LE29 (Flatpak e Snap: non necessaria per decisione dell'owner (2026-11-27): Flatpak e Snap non sono pacchetti distribuiti né supportati), LE30 e LE31 (redirect e iframe), LE32.
 5. Linux con `CLARAE_WEBVIEW=off`: LE7, L1…L3.
 
 **Da annotare comunque:** il sistema, la versione del runtime (WebView2 o `webkit2gtk-4.1`), la sessione (X11 o Wayland, nativo o XWayland), la scala dello schermo e il valore di ogni variabile `WEBKIT_*` impostata.
@@ -59,6 +59,6 @@ Si eseguono i casi della [matrice](m18-webview-matrice.md): **sezione 2** (WE1�
 
 Una riga per esecuzione. Un difetto va annotato sotto il caso con il suo livello e, se riguarda ADR-0062 o ADR-0063 (accettati il 2026-11-20), riportato in [`docs/roadmap.md`](../roadmap.md) §13-quindecies.
 
-| Data | Sistema operativo e versione | Versione dell'app | Esecutore | Casi eseguiti | Difetti |
-| ---- | ---------------------------- | ----------------- | --------- | ------------- | ------- |
-|      |                              |                   |           |               |         |
+| Data       | Sistema operativo e versione | Versione dell'app | Esecutore | Casi eseguiti                                                                             | Difetti            |
+| ---------- | ---------------------------- | ----------------- | --------- | ----------------------------------------------------------------------------------------- | ------------------ |
+| 2026-11-27 | non annotato                 | non annotata      | owner     | runbook terminato, esito positivo (dichiarato, senza esito per riga); LE29 non necessaria | nessuno dichiarato |

@@ -44,7 +44,7 @@ L'owner segnala che «Esci» non esce davvero: dopo il logout si rientra senza p
 - vitest per `oidc.ts` (`oidc.test.ts`): opzioni del `UserManager`, `signOut` con `id_token_hint`, `client_id` e `post_logout_redirect_uri`, `prompt=login` dopo l'uscita e non dopo una scadenza; e2e `web/e2e/app.spec.ts`: `/signed-out` senza redirect automatico.
 - Test Go del realm esteso (`go test ./internal/keycloak/...` nel cloud).
 - Unit Go del desktop con un server OIDC finto (`logout_test.go`): revoca e logout dagli endpoint della discovery e ripiego sull'URL di Keycloak, status non 2xx tollerato, rete che non risponde senza bloccare l'uscita, `prompt=login` solo dopo l'uscita esplicita.
-- **QA manuale sullo stack e su E2BR:** Esci (web e desktop) → pagina «uscito» (web) → Accedi chiede la password.
+- **QA manuale sullo stack e su E2BR:** Esci (web e desktop) → pagina «uscito» (web) → Accedi chiede la password. Il runbook [`m21-correttivi.md`](../qa/m21-correttivi.md) è terminato dall'owner il 2026-11-27 con esito positivo dichiarato, senza esito per riga.
 
 ## Alternative considerate
 

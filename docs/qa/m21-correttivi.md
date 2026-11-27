@@ -2,7 +2,7 @@
 
 Prove a mano per ciò che le suite automatiche non vedono: la finestra reale di macOS (WKWebView), un Keycloak vero, un aggiornamento che riparte da un database. Il lavoro è descritto in [roadmap §13-quaterdecies](../roadmap.md#13-quaterdecies-m21--correttivi-dello-schizzo-del-2026-11-15) e negli ADR [0057](../adr/0057-identita-dispositivo-desktop-hostname.md), [0058](../adr/0058-logout-completo-da-keycloak.md), [0059](../adr/0059-pulizia-cartella-configurazione-legacy-e-zip-coerente.md), [0060](../adr/0060-web-viewer-acceso-di-default.md) e [0061](../adr/0061-budget-iniziale-console-720.md), tutti accettati il 2026-11-16 (da recepire in `Specifications.md` v1.7, vedi [`spec-v1.7-proposta.md`](../spec-v1.7-proposta.md)). Per la preparazione dell'ambiente (Docker, strumenti, due dispositivi) vale il runbook [`verifica-manuale-1.7.md`](verifica-manuale-1.7.md), sezione 1; qui sono ripetuti solo i comandi che servono.
 
-**Stato al 2026-11-16: nessun caso di questo runbook è stato eseguito.** I comandi e i nomi sono stati letti sul codice e su `Taskfile.yml`; nessun passaggio che apre una finestra o parla con Keycloak è stato provato per scriverlo. Ciò che non si è potuto controllare è segnato **(non verificato)**. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1, P2) o `n/d`, con data, sistema operativo e build, come in [`verifica-manuale-1.7.md`](verifica-manuale-1.7.md#42-formato).
+**Eseguito dall'owner il 2026-11-27: runbook terminato con esito positivo (dichiarato, senza esito per riga)**, compresa la presentazione a tutto schermo nella WKWebView reale (P1…P3), le prove su Keycloak vero e sull'aggiornamento del registro di audit. Le colonne «Esito» restano vuote: l'owner non ha trasmesso sistema, build e esito di ogni caso. **Stato precedente, al 2026-11-16: nessun caso di questo runbook era stato eseguito.** I comandi e i nomi sono stati letti sul codice e su `Taskfile.yml`; nessun passaggio che apre una finestra o parla con Keycloak è stato provato per scriverlo. Ciò che non si è potuto controllare è segnato **(non verificato)**. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1, P2) o `n/d`, con data, sistema operativo e build, come in [`verifica-manuale-1.7.md`](verifica-manuale-1.7.md#42-formato).
 
 **Mappa dei punti dello schizzo**
 
@@ -155,6 +155,6 @@ Desktop su macOS (finestra reale) e workbench web. Nessun profilo da impostare: 
 
 Una riga per esecuzione. Un difetto va annotato sotto il caso con il suo livello (P0, P1, P2) e, se riguarda un ADR di M21, riportato in [`docs/roadmap.md`](../roadmap.md) §13-quaterdecies.
 
-| Data | Sistema operativo e versione | Build (hash, sviluppo o produzione) | Esecutore | Casi eseguiti | Difetti |
-| ---- | ---------------------------- | ----------------------------------- | --------- | ------------- | ------- |
-|      |                              |                                     |           |               |         |
+| Data       | Sistema operativo e versione | Build (hash, sviluppo o produzione) | Esecutore | Casi eseguiti                                                        | Difetti            |
+| ---------- | ---------------------------- | ----------------------------------- | --------- | -------------------------------------------------------------------- | ------------------ |
+| 2026-11-27 | non annotato                 | non annotata                        | owner     | runbook terminato, esito positivo (dichiarato, senza esito per riga) | nessuno dichiarato |
