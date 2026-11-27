@@ -2,10 +2,10 @@
 
 |                       |                                                                                                                                                     |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | accettata                                                                                                                                           |
+| **Stato**             | accettata (2026-11-02); recepita in `Specifications.md` v1.12 (2026-11-27); implementata in M12 e rilasciata con la 1.3.2                           |
 | **Data**              | 2026-11-02                                                                                                                                          |
 | **Riferimenti spec**  | §3.4.4 B (bootstrap dal manifest), Appendice A (affidabilità dei dati, RPO); D-04 (nessuna perdita silenziosa); integra ADR-0022 (bug 3) e ADR-0039 |
-| **Devia dallo spec?** | sì (§3.4.4: i file che il server non elenca più finiscono nel cestino locale) → richiede aggiornamento di `Specifications.md` da parte dell'owner   |
+| **Devia dallo spec?** | sì (§3.4.4: i file che il server non elenca più finivano nel cestino locale) → portato nello spec v1.12 (§3.4.4 B, §3.5.2, §3.5.3, C.4)             |
 
 ## Contesto
 
@@ -42,6 +42,6 @@ Il risultato è una perdita silenziosa su tutti i client, contraria a D-04 e all
 
 - Dopo un PITR i client ripubblicano le revisioni perse; se più dispositivi avevano la stessa revisione, il primo la ripubblica e gli altri la ritrovano identica (stesso hash, nessun conflitto) oppure vanno al merge.
 - Un file cancellato dopo il punto di ripristino può ricomparire su altri dispositivi: è il compromesso scelto, coerente con D-04 (meglio un file in più che uno perso). Il comportamento va descritto nella guida admin (backup e ripristino).
-- `Specifications.md` §3.4.4 va aggiornato dall'owner: il cestino locale si applica solo con `compaction_seq`; il parametro `since_id` di `GET /vaults/{id}/changes` va aggiunto a §3.4.4 e all'OpenAPI.
+- **Riportato in `Specifications.md` v1.12 (2026-11-27):** il cestino locale si applica solo con `compaction_seq` e il bootstrap con il server indietro ripubblica (§3.4.4 B); il parametro `since_id` di `GET /vaults/{id}/changes`, `next_id` e `as_of_id` sono in §3.4.4 B, §3.5.2 e §3.5.3 e nell'OpenAPI.
 - Nei vault privati l'hash del server è quello del ciphertext: se un altro dispositivo ha già ripubblicato lo stesso testo con un nonce diverso, la riga viene ripubblicata di nuovo come revisione identica, senza conflitti né perdite.
 - Test: unitario sul bootstrap con `last_seq` e test e2e in `apps/desktop/internal/sync/e2e_test.go` che simula il ripristino del server a un `seq` precedente.

@@ -428,7 +428,7 @@ M0 Fondamenta ─┬─► M1 Core editing ─┬─► M3 Excalidraw+Canvas ─
 
 ### M7-WP3 Distribuzione e aggiornamenti
 
-- `internal/updater`: canale di update firmato (manifest JSON firmato ed25519, verifica firma, download, applicazione per OS), UI "Aggiornamento disponibile".
+- `internal/updater`: canale di update firmato (manifest JSON firmato ed25519, verifica firma, download, applicazione per OS), UI "Aggiornamento disponibile". _(ADR-0023, accettata e recepita nella v1.12 il 2026-11-27: il funzionamento non è attivo, l'updater è compilato fuori dalle build di rilascio dalla 1.2.2; vedi `Specifications.md` §2.5.)_
 - Installer: NSIS (Windows, firma Authenticode), `.dmg` notarizzato (macOS), AppImage + `.deb` (Linux, `.desktop` con `x-scheme-handler/clarae`); pipeline release con tag semver; immagini OCI firmate (cosign) + Helm chart completo (HPA, PDB, secret, ingress gRPC/HTTP2) e `compose` per on-premise.
 
 ### M7-WP4 Accessibilità, i18n, documentazione
@@ -711,7 +711,7 @@ Punti lasciati aperti, con la motivazione:
 - **Live Preview:** `scanBlocks` legge ancora l'intero documento per il frontmatter a ogni transazione; è il prossimo intervento sulle note molto lunghe.
 - **Query duplicate:** cinque copie restano tra `sync`/`sharing` e `notify`/`sharing` per evitare cicli di import (ADR-0033); un test le vuole identiche.
 - **Liste paginate:** il cambio di forma di `/shares` e `/shared-with-me` richiede di aggiornare i desktop prima del cloud (CHANGELOG, «Compatibilità»).
-- **Specifica:** ADR-0046 devia da `Specifications.md` §3.4.4 e introduce `since_id`; ADR-0045 e ADR-0046 vanno recepiti dal proprietario.
+- **Specifica:** ADR-0046 devia da `Specifications.md` §3.4.4 e introduce `since_id`; ADR-0045 e ADR-0046 vanno recepiti dal proprietario. **Fatto il 2026-11-27:** `Specifications.md` v1.12 li recepisce (§1.7, §3.4.4 B, §3.5.2, §3.5.3, §4.5, C.4).
 
 ## 13-sexies. M13 — Apertura dei file per tipo e presentazioni Marp
 
@@ -763,7 +763,7 @@ Richiesta del 2026-11-05. Un `.marp` si apre in un editor a tutta larghezza, sen
 
 - **Compatibilità:** un client ≤ 1.3.3 vede `<!-- clarae: hidden -->` come una nota e mostra la slide (riportato nel CHANGELOG, _Unreleased_).
 - **Tema nel PPTX:** approssimato; da verificare aprendo il file in PowerPoint o Keynote.
-- **Specifica:** ADR-0047 e ADR-0048 vanno recepiti insieme dal proprietario.
+- **Specifica:** ADR-0047 e ADR-0048 vanno recepiti insieme dal proprietario. **Fatto il 2026-11-27:** `Specifications.md` v1.12 li recepisce (A-01, §2.2.1, §2.6.6, §3.4.2, §3.4.5, §3.4.6, C.4).
 
 ## 13-octies. M15 — Migrazione a Wails v3
 
@@ -906,7 +906,7 @@ No-go su 1, 2, 4 o 6: l'intervento si ferma e si torna all'owner con i dati.
 
 **Stato dei criteri di uscita M16 (2026-11-11):**
 
-- ADR-0049 e ADR-0050 accettati: **ADR-0049 sì, il 2026-11-12** (decisione dell'owner, senza le prove manuali di A-W8; non ancora recepito in `Specifications.md`); **ADR-0050 no** (proposta).
+- ADR-0049 e ADR-0050 accettati: **ADR-0049 sì, il 2026-11-12** (decisione dell'owner, senza le prove manuali di A-W8; non ancora recepito in `Specifications.md`); **ADR-0050 no** (proposta). **Aggiornamento 2026-11-27:** ADR-0050 è accettata e `Specifications.md` v1.12 recepisce ADR-0049 e ADR-0050 (§2.2.1, §2.3.1–§2.3.3, §2.6.6, §2.8.3, §3.4.2, §4.2, C.2, C.4); le prove manuali di A-W8 restano da fare e ADR-0050 resta implementata e inattiva.
 - Spike A-W0: alla lettera NO-GO; le condizioni per il GO sono attuate (blocchi raw e rimisura; `trailing`, `tablePipeAlign`, `remark-emoji` escluso, override di image-block e Latex, Twemoji locale; entry tagliata senza alzare i limiti; TopBar spenta) **tranne la prova IME su WKWebView**, ancora da fare.
 - Un `.md` aperto e salvato senza modifiche resta byte-identico, e la modifica di un blocco cambia solo le righe del blocco: misurato il 2026-11-11 su 1075 file con `live:metrics` (rieseguito in A-W8, 9 test passati in 146 s, stessi numeri; il fuzz su 4 semi casuali dà 17 divergenze su circa 88.000 modifiche, 99,98%, identiche al cancello A, e 0 su 65.554 con 3 semi «reali»; la caccia differenziale di A-W8 ha però trovato divergenze nuove nei percorsi di modifica che il cancello non misura, vedi sotto) (C1 1074/1074, C1-edit 35041/35041, C2 4266/4267, C3 1074/1074, C4 0 sporchi), e i criteri sono asserzioni di `conformance.test.ts`; `task conformance` intero non è stato rieseguito dalla catena di documentazione.
 - Righe di parità toccate con un test verde su desktop-mock e web-core con motore Milkdown: sì. `task e2e-matrix` con `CLARAE_LIVE_ENGINE=milkdown` ha dato 313 passati, 0 falliti, 13 saltati (11,6 min); con l'interruttore spento 249 passati, 0 falliti, 77 saltati (10,8 min; i 64 saltati in più sono gli spec `live-*`). Il primo giro con l'interruttore spento fu invalidato da un problema d'ambiente (69 `ENOENT` per una cartella di risultati cancellata da un processo concorrente) e rilanciato con porte proprie.

@@ -1,12 +1,12 @@
 # ADR-0048 — Presentazioni Marp: editor a tutta larghezza, tab SlideShow, export nel ribbon e PPTX modificabile
 
-|                       |                                                                                                                                                                                                                                                                                                                |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | accettata                                                                                                                                                                                                                                                                                                      |
-| **Data**              | 2026-11-05                                                                                                                                                                                                                                                                                                     |
-| **Riferimenti spec**  | §2.2.1 (matrice funzioni), §2.3 (editor e rendering), §3.4.5 (strategia per tipo di file); V-02/D-01, D-04, V-07; ADR-0020, ADR-0027, ADR-0045, ADR-0047                                                                                                                                                       |
-| **Devia dallo spec?** | sì, come ADR-0047: §2.2.1 (righe «Presentazioni Marp» e «Export»: vista, tab SlideShow, ribbon, PPTX), §3.4.5 (`.marp` nella riga «Markdown»), §3.4.6 (`.marp` nel contenuto sincronizzato) → richiede aggiornamento di `Specifications.md` da parte dell'owner, che deve recepire insieme ADR-0047 e ADR-0048 |
-| **Superfici**         | desktop (editor, tab SlideShow, ribbon, binding `ExportAPI.SaveFile`) · workbench web (stessa UI sul core WASM; il PPTX viene scaricato; prove sul core nella matrice `e2e:workbench-ui`) · console: nessuna · cloud: nessuna (il server non interpreta il contenuto)                                          |
+|                       |                                                                                                                                                                                                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata (2026-11-05); recepita in `Specifications.md` v1.12 (2026-11-27) insieme ad ADR-0047; implementata e rilasciata con la 1.3.4 (M14); l'adattamento a tutto schermo è stato corretto in M29 e M30 (1.8.5 e 1.8.6) senza cambiare questo ADR                   |
+| **Data**              | 2026-11-05                                                                                                                                                                                                                                                            |
+| **Riferimenti spec**  | §2.2.1 (matrice funzioni), §2.3 (editor e rendering), §3.4.5 (strategia per tipo di file); V-02/D-01, D-04, V-07; ADR-0020, ADR-0027, ADR-0045, ADR-0047                                                                                                              |
+| **Devia dallo spec?** | sì, come ADR-0047: §2.2.1 (righe «Presentazioni Marp» e «Export»: vista, tab SlideShow, ribbon, PPTX), §3.4.5 (`.marp` nella riga «Markdown»), §3.4.6 (`.marp` nel contenuto sincronizzato) → portato nello spec v1.12, insieme ad ADR-0047 (§2.2.1, §3.4.5, C.4)     |
+| **Superfici**         | desktop (editor, tab SlideShow, ribbon, binding `ExportAPI.SaveFile`) · workbench web (stessa UI sul core WASM; il PPTX viene scaricato; prove sul core nella matrice `e2e:workbench-ui`) · console: nessuna · cloud: nessuna (il server non interpreta il contenuto) |
 
 ## Contesto
 
@@ -83,7 +83,7 @@ Gli strumenti di creazione restano fissi; il gruppo export dipende dal tipo del 
 
 ## Conseguenze
 
-- Spec da aggiornare (owner), insieme ad ADR-0047: §2.2.1 (presentazioni, export per tipo di file, PPTX), §3.4.5 e §3.4.6 come da ADR-0047.
+- **Riportato in `Specifications.md` v1.12 (2026-11-27), insieme ad ADR-0047:** §2.2.1 (presentazioni, export per tipo di file, PPTX), §3.4.5 e §3.4.6 come da ADR-0047.
 - ADR-0047 è parzialmente superata da ADR-0048 per la vista divisa (§4) e il PPTX rinviato (§5 e relative alternative e conseguenze); il resto resta valido.
 - Compatibilità: il commento `<!-- memobrain: hidden -->` non è riconosciuto da client ≤ 1.3.3 né da altri strumenti Marp, che mostrano la slide e possono leggerlo come nota. Il merge a 3 vie dei `.marp` non cambia (sono ancora Markdown).
 - Nuova dipendenza (`pptxgenjs`) da tenere aggiornata, nel chunk lazy e dentro i budget dei bundle; la CSP non cambia.

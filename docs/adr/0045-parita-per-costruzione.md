@@ -1,11 +1,11 @@
 # ADR-0045 — Parità per costruzione tra desktop, workbench web e console
 
-|                       |                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------- |
-| **Stato**             | accettata                                                                                         |
-| **Data**              | 2026-11-02                                                                                        |
-| **Riferimenti spec**  | §1.7 e §2.8.3 (workbench web), §2.5 (core); A-03; estende ADR-0029, ADR-0030, ADR-0037 e ADR-0043 |
-| **Devia dallo spec?** | no (cambia come si garantisce la parità, non le funzioni)                                         |
+|                       |                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata (2026-11-02); recepita in `Specifications.md` v1.12 (2026-11-27); implementata in M12 e rilasciata con la 1.3.2 |
+| **Data**              | 2026-11-02                                                                                                                |
+| **Riferimenti spec**  | §1.7 e §2.8.3 (workbench web), §2.5 (core); A-03; estende ADR-0029, ADR-0030, ADR-0037 e ADR-0043                         |
+| **Devia dallo spec?** | no (cambia come si garantisce la parità, non le funzioni); recepita nello spec v1.12 (§1.7, §4.5, C.4)                    |
 
 ## Contesto
 
