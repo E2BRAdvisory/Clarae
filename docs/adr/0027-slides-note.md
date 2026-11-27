@@ -8,6 +8,8 @@
 | **Riferimenti spec**  | §2.2.1 (riga `slides`, P2), Appendice B (post-1.0); V-02/D-01, V-07/D-07; ADR-0004, ADR-0005, ADR-0026                                           |
 | **Devia dallo spec?** | sì (§2.2.1 riga `slides`: da P2 a P1; Appendice B: Slides esce dal post-1.0) → richiede aggiornamento di `Specifications.md` da parte dell'owner |
 
+> **Nota (2026-11-27), presentazioni Marp ([ADR-0047](0047-apertura-file-per-tipo-e-presentazioni-marp.md), [ADR-0048](0048-presentazioni-marp-slideshow-ribbon-pptx.md)).** I file `.marp` sono una funzione **distinta** dalle slide di questo ADR: una nota `.md` si presenta con la pipeline della vista di lettura e le chiavi `slide-*`, mentre un `.marp` si apre in una propria scheda con l'editor Marp, lo SlideShow e l'export PPTX. L'alternativa «file di slide dedicati», scartata qui, è stata ripresa da ADR-0047 per i soli `.marp`; le slide delle note restano come le descrive questo ADR.
+
 ## Contesto
 
 Il mockup della shell (ADR-0026) include nella sidebar destra una tab _ShowSlide_ per configurare la presentazione del documento aperto: slide, effetti, note del presentatore. Lo spec classifica Slides come P2 post-1.0, con la sola indicazione «separatore `---`». Si decide di implementarla in M8, quindi lo spec va allineato.

@@ -9,6 +9,8 @@
 
 > **Nota (ADR-0051, accettata il 2026-11-20 e recepita in `Specifications.md` v1.8).** Il tag di build `production` non lo imposta più `wails build`: lo passa `go build -tags production` (`scripts/build-desktop-bin.sh`, più `gtk3` su Linux). Le due CSP e la regola per sviluppo e produzione restano quelle descritte. Il testo qui sotto è storico e non cambia.
 
+> **Nota (2026-11-27), editor Live su Milkdown ([ADR-0049](0049-editor-live-milkdown.md)).** Verifica statica del codice: ProseMirror (`prosemirror-view`) e il codice Live del workbench (`packages/workbench/src/editor/live`) impostano gli stili solo dal CSSOM (`el.style.…`, `style.cssText`, `style.setProperty`), che la CSP non limita; Milkdown quindi non aggiunge né toglie motivi per `style-src 'unsafe-inline'`, che resta necessario per CodeMirror (modo Source), KaTeX ed Excalidraw. Non è una prova in una WebView reale.
+
 ## Contesto
 
 Il frontend è servito dall'asset server di Wails; in sviluppo passa dal dev server Vite (HMR via WebSocket, stili inline). Serve una CSP stretta in produzione senza rompere lo sviluppo.

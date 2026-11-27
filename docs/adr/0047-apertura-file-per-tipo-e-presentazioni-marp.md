@@ -73,7 +73,7 @@ Un unico gestore (`openFile` in `packages/workbench/src/app/openFile.ts`) decide
 
 ## Conseguenze
 
-- **Riportato in `Specifications.md` v1.12 (2026-11-27):** §3.4.5 riga «Markdown `.md`, `.marp`»; §3.4.6 contenuto sincronizzato con `.marp`; §2.2.1 nuove righe («Apertura dei file per tipo» e «Presentazioni Marp», funzione distinta dalle slide delle note); A-01, §2.6.6 (`features.presentations`) e §3.4.2. La nota in ADR-0027 che i file `.marp` sono una funzione distinta dalle slide delle note non c'è ancora.
+- **Riportato in `Specifications.md` v1.12 (2026-11-27):** §3.4.5 riga «Markdown `.md`, `.marp`»; §3.4.6 contenuto sincronizzato con `.marp`; §2.2.1 nuove righe («Apertura dei file per tipo» e «Presentazioni Marp», funzione distinta dalle slide delle note); A-01, §2.6.6 (`features.presentations`) e §3.4.2. La nota in ADR-0027 che i file `.marp` sono una funzione distinta dalle slide delle note è aggiunta il 2026-11-27.
 - Altri editor di note: i `.marp` possono non comparire nell'elenco dei file o apparire senza anteprima; gli altri strumenti Marp (VS Code, CLI) li leggono rinominandoli `.md`.
 - La parità è registrata in `shared/parity/features.yaml` con le voci `files.open-by-type` e `presentations.marp`.
 - Nuova dipendenza da tenere aggiornata e dentro i budget dei bundle; i temi di Marp sono la sola eccezione, limitata e sanificata, al divieto di CSS di terzi.
