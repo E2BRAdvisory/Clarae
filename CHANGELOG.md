@@ -6,6 +6,10 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+### Documentazione
+
+- `Specifications.md` alla **1.13**: completa il recepimento di [ADR-0070](docs/adr/0070-2-0-senza-rimozione-compatibilita-1x.md) con intestazione, riga del registro delle revisioni e riga in Appendice C.4 (il corpo era già aggiornato nella 2.0.0).
+
 ## [2.0.0] - 2026-11-27
 
 **La 2.0.0 è sola numerazione** ([ADR-0070](docs/adr/0070-2-0-senza-rimozione-compatibilita-1x.md)): il prodotto è quello della 1.8.8, più la documentazione. **Non toglie la compatibilità con la 1.x**, contrariamente a quanto ADR-0052 annunciava: schema `memobrain://`, cartella `.memobrain/`, voci del portachiavi, variabili `MEMOBRAIN_*`, realm `memobrain`, ruolo `memobrain-admin`, servizio gRPC `memobrain.v1` e `nameOverride: memobrain` restano fino a una release major successiva. Nessuna migrazione del database, nessun cambiamento del protocollo né delle API: client e cloud 2.0.0 lavorano con client e cloud 1.8.x.

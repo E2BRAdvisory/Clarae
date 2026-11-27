@@ -1547,7 +1547,7 @@ Richiesta dell'owner del 2026-11-24, con schizzo: posizione fissa dei template d
 
 Richiesta dell'owner del 2026-11-27: pubblicare la **2.0.0** sul codice della 1.8.8 senza togliere la compatibilità con la 1.x che ADR-0052 e ADR-0059 annunciavano «nella 2.0». Decisione: [ADR-0070](adr/0070-2-0-senza-rimozione-compatibilita-1x.md) (accettata dall'owner il 2026-11-27).
 
-**Stato (2026-11-27): M32-S1 e M32-S2 fatte e committate per sessione, rilasciate come versione 2.0.0 (tag `v2.0.0`). `task ci` verde per intero sull'albero del rilascio. In `Specifications.md` sono corrette le frasi «fino alla 2.0» del corpo; intestazione 1.13, riga del registro delle revisioni e riga ADR-0070 di C.4 restano da scrivere (modifica dello spec bloccata dai permessi).**
+**Stato (2026-11-27): M32-S1 e M32-S2 fatte e committate per sessione, rilasciate come versione 2.0.0 (tag `v2.0.0`). `task ci` verde per intero sull'albero del rilascio. ADR-0070 recepito in `Specifications.md` v1.13 (2026-11-27): corpo, intestazione, registro delle revisioni e riga di C.4.**
 
 | Sessione   | Contenuto                                                                                                                                                                                                                                                     | Stato              |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |

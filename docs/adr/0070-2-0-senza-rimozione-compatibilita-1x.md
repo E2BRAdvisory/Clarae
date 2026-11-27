@@ -2,7 +2,7 @@
 
 |                       |                                                                                                                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Stato**             | accettata (2026-11-27, decisione dell'owner)                                                                                                                                                     |
+| **Stato**             | accettata (2026-11-27, decisione dell'owner); recepita in `Specifications.md` v1.13 (2026-11-27)                                                                                                 |
 | **Data**              | 2026-11-27                                                                                                                                                                                       |
 | **Riferimenti spec**  | §1.3 (schema `memobrain://` e redirect della 1.x), §2.2.1 (URI scheme), §2.1 (cartella di configurazione), §3.4.6 (doppio nome della cartella), §3.6 (proto `memobrain.v1`), C.4 (riga ADR-0052) |
 | **Devia dallo spec?** | sì: lo spec dice in più punti che i nomi della 1.x restano «fino alla 2.0» → richiede l'aggiornamento di `Specifications.md` da parte dell'owner                                                 |
@@ -29,4 +29,4 @@ Il 2026-11-27 l'owner decide di pubblicare la **2.0.0** come sola numerazione, s
 
 - Nessun rischio per gli utenti: la 2.0.0 si comporta come la 1.8.8.
 - Il debito della compatibilità 1.x resta, senza una data.
-- `Specifications.md` va aggiornato dall'owner nei punti che dicono «fino alla 2.0» (§1.3, §2.1, §2.2.1, §3.4.6, §3.6 e la riga ADR-0052 di C.4).
+- `Specifications.md` è aggiornato nella v1.13 (§1.3, §2.1, §2.2.1, §3.4.6, §3.6, C.4).
