@@ -1,6 +1,6 @@
 # Runbook QA — M25: presenza in tempo reale (1.8.2)
 
-Prove manuali **a carico dell'owner**: nessuna è stata eseguita con utenti reali durante lo sviluppo (i test automatici usano un server finto e due «repliche» sullo stesso PostgreSQL). Decisione: [ADR-0065](../adr/0065-presenza-in-tempo-reale.md). Guide: [utente](../user-guide/presenza.md), [amministratore](../admin-guide/presenza.md).
+**Eseguita dall'owner il 2026-11-27: esito positivo (dichiarato, senza esito per riga)**, con più utenti, desktop e web. Durante lo sviluppo nessuna prova era stata eseguita con utenti reali (i test automatici usano un server finto e due «repliche» sullo stesso PostgreSQL); l'esito di ogni caso P1…P24 non è stato trasmesso. Decisione: [ADR-0065](../adr/0065-presenza-in-tempo-reale.md). Guide: [utente](../user-guide/presenza.md), [amministratore](../admin-guide/presenza.md).
 
 ## Preparazione
 

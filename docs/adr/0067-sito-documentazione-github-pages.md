@@ -1,12 +1,12 @@
 # ADR-0067 — Sito della documentazione su GitHub Pages, pubblicato da un workflow dedicato
 
-|                       |                                                                                                                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                                                |
-| **Data**              | 2026-11-23                                                                                                                                                                              |
-| **Riferimenti spec**  | §6 (Branching/verifiche); ADR-0036 (verifiche locali senza CI), ADR-0031 (pipeline di rilascio), ADR-0032 (Task)                                                                        |
-| **Devia dallo spec?** | sì: la riga «Branching/verifiche» e la voce ADR-0031 dell'Appendice C dicono che `release.yml` è l'unico workflow → richiede l'aggiornamento di `Specifications.md` da parte dell'owner |
-| **Superfici**         | nessuna superficie del prodotto: solo documentazione e repository                                                                                                                       |
+|                       |                                                                                                                                                                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stato**             | accettata (2026-11-27, decisione dell'owner); recepita in `Specifications.md` v1.11 (2026-11-27); implementata e rilasciata con la 1.8.4 (M27), con il perimetro ridotto alle tre cartelle dalla 1.8.5                                                                      |
+| **Data**              | 2026-11-23                                                                                                                                                                                                                                                                  |
+| **Riferimenti spec**  | §6 (Branching/verifiche); ADR-0036 (verifiche locali senza CI), ADR-0031 (pipeline di rilascio), ADR-0032 (Task)                                                                                                                                                            |
+| **Devia dallo spec?** | sì: la riga «Branching/verifiche» e la voce ADR-0031 dell'Appendice C dicevano che `release.yml` è l'unico workflow → aggiornate nello spec v1.11 (la riga sta in §4.5, che nel testo dell'ADR si chiama «§6»; anche l'albero di §4.1 e le voci ADR-0031 e ADR-0036 di C.4) |
+| **Superfici**         | nessuna superficie del prodotto: solo documentazione e repository                                                                                                                                                                                                           |
 
 ## Contesto
 
@@ -32,4 +32,4 @@ GitHub Pages, quando pubblica da un branch, serve solo la radice o la cartella `
 
 - **Positive:** documentazione navigabile e cercabile, aggiornata a ogni push su `main` senza passi manuali; nessun segreto (basta il `GITHUB_TOKEN`).
 - **Negative:** un secondo workflow da mantenere (pin delle azioni insieme a quelli di `release.yml`); un branch `gh-pages` con soli file generati, che cresce di un commit per pubblicazione; la sua storia conserva le prime pubblicazioni, che contenevano tutto `docs/` (il repository è pubblico, quindi nessuna informazione nuova). Le pagine sono template Vue: un tag HTML non chiuso nel testo di un documento (fuori dal codice) rompe il build del sito, che va quindi provato con `task docs-build` quando si scrivono documenti.
-- **Da fare:** l'owner aggiorna `Specifications.md` (§6 e Appendice C) e abilita Pages sul branch `gh-pages`. Se il repository è privato, GitHub Pages richiede un piano a pagamento.
+- **Da fare:** l'owner abilita Pages sul branch `gh-pages`. `Specifications.md` è già aggiornato (v1.11, 2026-11-27: §4.1, §4.5 e Appendice C). Se il repository è privato, GitHub Pages richiede un piano a pagamento.

@@ -2,7 +2,7 @@
 
 Da eseguire a mano, con la finestra vera del client desktop, prima di accendere per default `features.web_viewer` ([ADR-0056](../adr/0056-applicazioni-in-vista-nativa.md), accettato il 2026-11-15; per la 1.7.1 l'owner ha deciso di lasciare il flag spento; **in M21 l'owner lo ha acceso di default**, [ADR-0060](../adr/0060-web-viewer-acceso-di-default.md), quindi questa matrice resta da eseguire con la funzione già visibile a tutti). **In M22 la vista integrata è accesa anche su Windows e su Linux** ([ADR-0062](../adr/0062-vista-integrata-windows-linux.md), accettato il 2026-11-20): le sezioni 2 e 3 provano i due driver, con il ripiego e l'interruttore `CLARAE_WEBVIEW=off`. Le prove automatiche non vedono la vista nativa: qui si verifica ciò che solo una finestra reale mostra. **Come prepararle, in che ordine eseguirle e dove registrare gli esiti:** il runbook [`verifica-manuale-1.7.md`](verifica-manuale-1.7.md).
 
-**Stato al 2026-11-19: nessun caso di questa matrice è stato eseguito** (la sezione 1 è del 2026-11-15; le sezioni 2 e 3 sono state riscritte il 2026-11-19 per M22). La colonna «Esito» è vuota di proposito. Per ogni caso si scrive l'esito (`ok`, `ko` con una riga sul difetto e il suo livello P0, P1, P2, oppure `n/d`), con data, sistema operativo e versione provata, nel registro in fondo.
+**Eseguita dall'owner il 2026-11-27: esito positivo (dichiarato, senza esito per riga)** (driver Windows WebView2 e Linux WebKitGTK; vista integrata delle applicazioni). Le colonne «Esito» restano vuote perché l'owner non ha trasmesso l'esito di ogni riga; macOS non è dichiarato. Stato precedente, al 2026-11-19: nessun caso di questa matrice era stato eseguito (la sezione 1 è del 2026-11-15; le sezioni 2 e 3 sono state riscritte il 2026-11-19 per M22). La colonna «Esito» è vuota di proposito. Per ogni caso si scrive l'esito (`ok`, `ko` con una riga sul difetto e il suo livello P0, P1, P2, oppure `n/d`), con data, sistema operativo e versione provata, nel registro in fondo.
 
 ## Cosa è già coperto da prove automatiche e cosa no
 
@@ -219,6 +219,7 @@ Un browser con il workbench aperto dalla console del cloud, con il flag acceso n
 
 Una riga per esecuzione. Un difetto va annotato sotto il caso con il suo livello (P0, P1, P2) e, se blocca l'accensione del flag, riportato in [`docs/roadmap.md`](../roadmap.md) §13-undecies.
 
-| Data | Sistema operativo e versione | Versione dell'app | Esecutore | Casi eseguiti | Difetti |
-| ---- | ---------------------------- | ----------------- | --------- | ------------- | ------- |
-|      |                              |                   |           |               |         |
+| Data       | Sistema operativo e versione                      | Versione dell'app | Esecutore | Casi eseguiti                                                       | Difetti            |
+| ---------- | ------------------------------------------------- | ----------------- | --------- | ------------------------------------------------------------------- | ------------------ |
+| 2026-11-27 | Windows e Linux (sistemi e versioni non annotati) | non annotata      | owner     | matrice eseguita, esito positivo (dichiarato, senza esito per riga) | nessuno dichiarato |
+|            |                                                   |                   |           |                                                                     |                    |

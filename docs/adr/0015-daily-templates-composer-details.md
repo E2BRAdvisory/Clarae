@@ -1,6 +1,6 @@
 # ADR-0015 — Note giornaliere, template, composer: dettagli (M6-WP3a)
 
-- Stato: accettata
+- Stato: accettata; emendata da [ADR-0068](0068-template-in-clarae-templates.md) (2026-11-27, recepita nello spec v1.11): i template non stanno più in una cartella configurabile del vault (`templatesFolder`) ma in `.clarae/templates/`
 - Recepito in: `Specifications.md` v1.4 (2026-11-02): §2.2.1, §2.6.6, §3.4.6 (Appendice C.4)
 - Contesto: M6-WP3 (prima metà: daily/unique note, template, composer, slash commands, nota casuale).
 

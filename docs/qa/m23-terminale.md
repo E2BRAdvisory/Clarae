@@ -2,7 +2,7 @@
 
 Prove a mano per ciò che le suite automatiche non vedono: shell vere, una seconda finestra del sistema, processi che non devono restare orfani, ConPTY su Windows. Il lavoro è descritto in [roadmap §13-sedecies](../roadmap.md#13-sedecies-m23--terminale-integrato-ancorabile-e-sganciabile) e in [ADR-0064](../adr/0064-terminale-integrato-e-finestra-separata.md); la guida per gli utenti è [terminale.md](../user-guide/terminale.md).
 
-**Stato al 2026-11-20: nessun caso di questo runbook è stato eseguito.** Nomi, tasti e comportamenti sono stati letti sul codice. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1 o P2) oppure `n/d`, con data, sistema e versione. **Nulla del terminale è provato su una finestra reale, e il driver di Windows (ConPTY, Job Object) è provato solo in compilazione.**
+**Eseguita dall'owner il 2026-11-27: esito positivo (dichiarato, senza esito per riga)**, T20…T27 di M24 comprese, ConPTY e Job Object su Windows compresi. La colonna «Esito» resta vuota perché l'owner non ha trasmesso l'esito di ogni riga. Stato precedente, al 2026-11-20: nessun caso di questo runbook era stato eseguito. Nomi, tasti e comportamenti sono stati letti sul codice. La colonna «Esito» è vuota di proposito: si scrive `ok`, `ko` (con una riga sul difetto e il livello P0, P1 o P2) oppure `n/d`, con data, sistema e versione. Al 2026-11-20 nulla del terminale era provato su una finestra reale e il driver di Windows (ConPTY, Job Object) era provato solo in compilazione.
 
 ## Che cosa coprono già le prove automatiche
 

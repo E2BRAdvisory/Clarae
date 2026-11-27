@@ -10,7 +10,7 @@
 
 ## Contesto
 
-L'importer porta in un vault note di altre app. I file sorgente sono non fidati. Apple Notes è rinviato a P2. Le fixture in `internal/importer/testdata` sono scritte a mano dalla conoscenza dei formati, non sono export reali.
+L'importer porta in un vault note di altre app. I file sorgente sono non fidati. Apple Notes non è previsto: era rinviato a P2 e l'owner ha respinto l'importer il 2026-11-27 ([ADR-0069](0069-importer-apple-notes.md)). Le fixture in `internal/importer/testdata` sono scritte a mano dalla conoscenza dei formati, non sono export reali.
 
 ## Decisione
 
@@ -39,4 +39,4 @@ L'importer porta in un vault note di altre app. I file sorgente sono non fidati.
 
 ## Conseguenze
 
-Limiti noti: dati reali non verificati; Apple Notes (P2); Notion senza i valori delle relazioni risolti; la conversione HTML non riproduce layout complessi. I wikilink brevi sono univoci solo tra i file importati, non rispetto al resto del vault.
+Limiti noti: dati reali non verificati; Apple Notes non previsto (ADR-0069, respinta il 2026-11-27); Notion senza i valori delle relazioni risolti; la conversione HTML non riproduce layout complessi. I wikilink brevi sono univoci solo tra i file importati, non rispetto al resto del vault.

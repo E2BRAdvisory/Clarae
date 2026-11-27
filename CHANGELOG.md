@@ -6,6 +6,17 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+Decisioni dell'owner del 2026-11-27: [ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md) e [ADR-0068](docs/adr/0068-template-in-clarae-templates.md) accettati e recepiti in `Specifications.md` 1.11; [ADR-0069](docs/adr/0069-importer-apple-notes.md) respinta. Nessun cambiamento del prodotto, del protocollo né dei contratti.
+
+### Compatibilità
+
+- **Apple Notes non è previsto:** l'importer non si implementa (ADR-0069, respinta). Gli importer disponibili restano Markdown/HTML, Evernote ENEX, Notion, Roam, Bear, Google Keep e CSV.
+
+### Documentazione
+
+- `Specifications.md` alla **1.11**: recepisce ADR-0067 (sito della documentazione e workflow `docs.yml`, eccezione ad ADR-0036: §4.1, §4.5) e ADR-0068 (template in `.clarae/templates/`: §2.2.1, §2.6.6, §3.4.5, §3.4.6, §3.4.7), con le voci di Appendice C.
+- Le prove manuali dell'owner del 2026-11-27 sono registrate con esito positivo (dichiarato, senza esito per riga): matrice di Wails v3 su Windows e Linux (B-W8), vista integrata delle applicazioni (driver WebView2 e WebKitGTK), terminale integrato (ConPTY e Job Object compresi) e presenza in tempo reale con più utenti. Cambiano le avvertenze «non provato» in spec, ADR, roadmap, runbook QA e guide (applicazioni, profili di configurazione).
+
 ## [1.8.8] - 2026-11-27
 
 Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S4…S6, [ADR-0066](docs/adr/0066-vcs-esclusi-e-file-non-inviati.md) (accettata): **Impostazioni › Sincronizzazione mostra i file che questo dispositivo non invia al cloud, con il motivo**. Il core e i binding sono già nella 1.8.3. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.

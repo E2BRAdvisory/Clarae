@@ -2,11 +2,13 @@
 
 |                       |                                                                                                                                                                                                         |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stato**             | proposta                                                                                                                                                                                                |
+| **Stato**             | respinta (2026-11-27, decisione dell'owner): l'importer di Apple Notes non si implementa                                                                                                                |
 | **Data**              | 2026-11-27                                                                                                                                                                                              |
 | **Riferimenti spec**  | §2.2.1 (riga «Importer», «Apple Notes solo macOS (P2)»); §2.5 (modulo `importer`); V-02; ADR-0017                                                                                                       |
 | **Devia dallo spec?** | no: realizza una voce P2 già prevista; se si sceglie l'opzione B va aggiunta a §2.5 e App. B l'autorizzazione «Automazione» di macOS                                                                    |
 | **Superfici**         | desktop (solo macOS per la lettura diretta); workbench web: eccezione di parità per la lettura diretta, mentre l'import di un'esportazione in Markdown vale ovunque con l'importer «cartella» esistente |
+
+> **Nota (2026-11-27).** L'owner ha **respinto** questo ADR: l'importer di Apple Notes non si implementa e la lacuna di M6 è chiusa. Né il passo 1 (voce «Apple Notes (esportazione Markdown)») né il passo 2 (lettura diretta via JXA) vanno realizzati. Il testo sotto è la proposta com'era, conservata come storico. Nessun codice né spec da cambiare: `Specifications.md` §2.2.1 e ADR-0017 dicono che Apple Notes non è previsto.
 
 ## Contesto
 
