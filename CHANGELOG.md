@@ -6,7 +6,9 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
-Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S4 e M26-S5, [ADR-0066](docs/adr/0066-vcs-esclusi-e-file-non-inviati.md) (accettata): **Impostazioni › Sincronizzazione mostra i file che questo dispositivo non invia al cloud, con il motivo**. Il core e i binding sono già nella 1.8.3. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
+## [1.8.8] - 2026-11-27
+
+Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S4…S6, [ADR-0066](docs/adr/0066-vcs-esclusi-e-file-non-inviati.md) (accettata): **Impostazioni › Sincronizzazione mostra i file che questo dispositivo non invia al cloud, con il motivo**. Il core e i binding sono già nella 1.8.3. Nessuna migrazione del database, nessun cambiamento del protocollo né del cloud.
 
 ### Client desktop
 
@@ -16,12 +18,20 @@ Milestone M26 ([roadmap](docs/roadmap.md) §13-novodecies), sessioni M26-S4 e M2
 
 ### Client workbench (browser)
 
-- Lo stesso blocco nel workbench web, sul core WebAssembly: la voce `sync.unsent` del registro di parità è `yes` anche sul web, provata dallo spec della matrice `sync-unsent.spec.ts` (il core rifiutato dal mock REST, poi «Riprova»).
+- Lo stesso blocco nel workbench web, sul core WebAssembly: la voce `sync.unsent` del registro di parità è `yes` anche sul web, provata dallo spec della matrice `sync-unsent.spec.ts` (una nota rifiutata dal mock REST, messa da parte dal core, elencata e rimandata con «Riprova»).
 
 ### Documentazione
 
 - [Sincronizzazione e cloud](docs/user-guide/sync-cloud.md): sezione «File non inviati» (motivi, «Riprova», che cosa non è elencato, cartelle `.git` e simili mai sincronizzate; i file già nel cloud restano e contano nella quota).
 - [Risoluzione dei problemi](docs/user-guide/risoluzione-problemi.md): voce «Un file non arriva sugli altri dispositivi».
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 1.8.8 (stub rigenerati); nessuna operazione nuova. Nessun binding nuovo: `SyncAPI.Unsent` e `SyncAPI.RetryUnsent` sono della 1.8.3.
+
+### Verificato
+
+Sull'albero della 1.8.8 (prima del commit di rilascio, che cambia solo versioni e note): tutti i passi di `task ci` (`lint` con eslint, prettier, `lint-go` e `lint-brand`; `vet-windows`, `vet-linux`, typecheck, `govulncheck`, `wailsjs`, `test-go`, `test-ts`, conformance, `test-wasm`, `test-core`, `web-budget`, `task parity` con 99 funzioni e 214 comandi, `check-gen`); `task test-integration`; `task test-desktop-e2e`, rilanciato dopo la correzione del push; `task e2e-desktop` (282 test); lo spec `sync-unsent.spec.ts` della matrice sul mock Wails e sul core WebAssembly; una revisione avversariale, esito Fail, con tutti i rilievi corretti. `task lint-ts` lanciato com'è si ferma sulla formattazione di una cartella `skills/` non tracciata, estranea a questa versione: prettier è verde su tutti i file del repository. **Non eseguiti:** l'intera matrice e2e e Playwright su WebKit, e una prova manuale nell'app desktop.
 
 ## [1.8.7] - 2026-11-24
 
