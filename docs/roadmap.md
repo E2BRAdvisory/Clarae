@@ -1543,6 +1543,17 @@ Richiesta dell'owner del 2026-11-24, con schizzo: posizione fissa dei template d
 
 ---
 
+## 13-quinvicies. M32 — 2.0.0 come sola numerazione
+
+Richiesta dell'owner del 2026-11-27: pubblicare la **2.0.0** sul codice della 1.8.8 senza togliere la compatibilità con la 1.x che ADR-0052 e ADR-0059 annunciavano «nella 2.0». Decisione: [ADR-0070](adr/0070-2-0-senza-rimozione-compatibilita-1x.md) (accettata dall'owner il 2026-11-27).
+
+**Stato (2026-11-27): M32-S1 e M32-S2 fatte e committate per sessione, rilasciate come versione 2.0.0 (tag `v2.0.0`). `task ci` verde per intero sull'albero del rilascio. In `Specifications.md` sono corrette le frasi «fino alla 2.0» del corpo; intestazione 1.13, riga del registro delle revisioni e riga ADR-0070 di C.4 restano da scrivere (modifica dello spec bloccata dai permessi).**
+
+| Sessione   | Contenuto                                                                                                                                                                                                                                                     | Stato              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| **M32-S1** | ADR-0070 (con note di emendamento in ADR-0052 e ADR-0059 e riga nell'indice); commenti del codice, configurazioni (Compose, Helm, installer, proto), `scripts/rebrand/allowlist.tsv`, guide dell'amministratore e corpo dello spec: «major release after 2.0» | fatta (2026-11-27) |
+| **M32-S2** | Rilascio **2.0.0**: CHANGELOG, `info.version` di `api/openapi.yaml` con gli stub rigenerati, Compose, pentest-scope, questa sezione, `task ci`, tag                                                                                                           | fatta (2026-11-27) |
+
 ## 14. Trasversale: test e verifica
 
 | Livello            | Strumento                                                                         | Dove                                                       |

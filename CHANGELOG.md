@@ -6,17 +6,30 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-27
+
+**La 2.0.0 è sola numerazione** ([ADR-0070](docs/adr/0070-2-0-senza-rimozione-compatibilita-1x.md)): il prodotto è quello della 1.8.8, più la documentazione. **Non toglie la compatibilità con la 1.x**, contrariamente a quanto ADR-0052 annunciava: schema `memobrain://`, cartella `.memobrain/`, voci del portachiavi, variabili `MEMOBRAIN_*`, realm `memobrain`, ruolo `memobrain-admin`, servizio gRPC `memobrain.v1` e `nameOverride: memobrain` restano fino a una release major successiva. Nessuna migrazione del database, nessun cambiamento del protocollo né delle API: client e cloud 2.0.0 lavorano con client e cloud 1.8.x.
+
 Decisioni dell'owner del 2026-11-27: [ADR-0067](docs/adr/0067-sito-documentazione-github-pages.md) e [ADR-0068](docs/adr/0068-template-in-clarae-templates.md) accettati e recepiti in `Specifications.md` 1.11; [ADR-0069](docs/adr/0069-importer-apple-notes.md) respinta; [ADR-0023](docs/adr/0023-distribution-and-updates-details.md), [0045](docs/adr/0045-parita-per-costruzione.md), [0046](docs/adr/0046-bootstrap-server-indietro.md), [0047](docs/adr/0047-apertura-file-per-tipo-e-presentazioni-marp.md), [0048](docs/adr/0048-presentazioni-marp-slideshow-ribbon-pptx.md), [0049](docs/adr/0049-editor-live-milkdown.md) e [0050](docs/adr/0050-ai-inattiva-e-collab-spento.md) accettati e recepiti in `Specifications.md` 1.12. Nessun cambiamento del prodotto, del protocollo né dei contratti: l'accettazione non cambia lo stato del codice.
 
 ### Compatibilità
 
 - **Apple Notes non è previsto:** l'importer non si implementa (ADR-0069, respinta). Gli importer disponibili restano Markdown/HTML, Evernote ENEX, Notion, Roam, Bear, Google Keep e CSV.
+- **Compatibilità con la 1.x mantenuta** (ADR-0070): commenti del codice, configurazioni (Compose, Helm, installer, proto), `scripts/rebrand/allowlist.tsv` e guide dell'amministratore dicono ora «in una release major successiva alla 2.0» invece di «nella 2.0»; la tabella delle rimozioni di [migrazione a Clarae notanda](docs/admin-guide/migrazione-clarae.md) è aggiornata.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 2.0.0 (stub rigenerati); nessuna operazione nuova né cambiata.
 
 ### Documentazione
 
 - `Specifications.md` alla **1.12**: recepisce ADR-0023, ADR-0045, ADR-0046, ADR-0047, ADR-0048, ADR-0049 e ADR-0050 (§0.3, §1.2, §1.7, §2.2.1, §2.3, §2.5, §2.6.6, §2.8.3, §3.4.2, §3.4.4, §3.4.5, §3.4.6, §3.5.2, §3.5.3, §4.2, §4.5, App. B, C.1, C.2, C.4), ciascuno con lo stato reale. **ADR-0023 (manifest firmato, installer firmati, aggiornamento automatico) non è attivo**: non è mai stato eseguito su una release, l'updater è compilato fuori dalle build di rilascio dalla 1.2.2 e gli installer non sono firmati; mancano certificati, chiave del manifest e canale. **ADR-0050**: l'assistente AI e la collaborazione in tempo reale sono nel codice ma spenti e non disponibili; il co-editing resta escluso. **ADR-0049**: Live su Milkdown è implementato e rilasciato (1.4.0), ma le prove manuali su WebView reali (IME, correzione ortografica, lettori di schermo, incolla da app esterne, note grandi) restano da fare. ADR-0045 e ADR-0046 (1.3.2), ADR-0047 (1.3.3) e ADR-0048 (1.3.4) erano già rilasciati. Stato, indice degli ADR, roadmap (M7, M12, M13, M14, M16) allineati.
 - `Specifications.md` alla 1.11: recepisce ADR-0067 (sito della documentazione e workflow `docs.yml`, eccezione ad ADR-0036: §4.1, §4.5) e ADR-0068 (template in `.clarae/templates/`: §2.2.1, §2.6.6, §3.4.5, §3.4.6, §3.4.7), con le voci di Appendice C.
 - Le prove manuali dell'owner del 2026-11-27 sono registrate con esito positivo (dichiarato, senza esito per riga): matrice di Wails v3 su Windows e Linux (B-W8), vista integrata delle applicazioni (driver WebView2 e WebKitGTK), terminale integrato (ConPTY e Job Object compresi) e presenza in tempo reale con più utenti. Cambiano le avvertenze «non provato» in spec, ADR, roadmap, runbook QA e guide (applicazioni, profili di configurazione).
+
+### Verificato
+
+Sull'albero della 2.0.0: `task ci` per intero, verde (`lint` con eslint, prettier, `lint-go` e `lint-brand`; `vet-windows`, `vet-linux`, typecheck, `govulncheck`, `wailsjs`, `test-go`, `test-ts`, conformance, `test-wasm`, `test-core`, `web-budget`, `task parity`, `check-gen`). Il codice è quello della 1.8.8 (`task test-integration`, `task test-desktop-e2e`, `task e2e-desktop` e lo spec `sync-unsent` della matrice erano verdi su quell'albero) più commenti e documenti. `Specifications.md`: corrette le frasi «fino alla 2.0» del corpo; intestazione 1.13, registro e riga ADR-0070 di C.4 non ancora scritti.
 
 ## [1.8.8] - 2026-11-27
 
