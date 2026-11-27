@@ -6,11 +6,24 @@ Nelle sezioni fino alla 1.1.0 i comandi sono citati come `make <target>`: da pri
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-27
+
+Sola documentazione sul codice della 2.0.0: lo spec passa dalla 1.12 alla 1.14 e le prove manuali dell'owner del 2026-11-27 sono registrate. Nessun cambiamento del prodotto, del protocollo, delle API né del database: client e cloud 2.0.1 lavorano con client e cloud 2.0.0 e 1.8.x.
+
 ### Documentazione
 
 - `Specifications.md` alla **1.14**: registra le prove manuali del 2026-11-27 (Marp a tutto schermo nella WKWebView, cancello A-W8 per intero, runbook m21, m22 e 1.7) e dichiara Flatpak, Snap e macOS Intel fuori dalle prove e dal supporto ufficiale (§2.2.1, §2.3.2, App. A, C.2, C.4).
 - `Specifications.md` alla **1.13**: completa il recepimento di [ADR-0070](docs/adr/0070-2-0-senza-rimozione-compatibilita-1x.md) con intestazione, riga del registro delle revisioni e riga in Appendice C.4 (il corpo era già aggiornato nella 2.0.0).
 - Prove manuali dell'owner del 2026-11-27 registrate in roadmap, ADR e runbook QA, tutte con esito positivo dichiarato, senza esito per riga: presentazione Marp a tutto schermo nella WKWebView reale (M30; ADR-0048), cancello A-W8 dell'editor Live per intero (IME, controllo ortografico e lettori di schermo sulle tre WebView, incolla da app esterne, note reali grandi, matrice e CSP sulla shell reale; ADR-0049) e runbook [`m21-correttivi.md`](docs/qa/m21-correttivi.md), [`m22-nomi-file-e-applicazioni.md`](docs/qa/m22-nomi-file-e-applicazioni.md) e [`verifica-manuale-1.7.md`](docs/qa/verifica-manuale-1.7.md). Flatpak e Snap: prova non necessaria, non sono pacchetti distribuiti né supportati (i pacchetti sono `.deb` e AppImage). macOS Intel esce dalle matrici di prova: non provato e non supportato ufficialmente, il `.dmg` universal contiene comunque la parte x86_64 (nessuna modifica a build, script o workflow). Avvertenze «non provato» aggiornate in guida utente (applicazioni), guida dell'amministratore (profili, quote e audit) e README.
+- [ADR-0005](docs/adr/0005-webview-csp.md): nota sulla CSP dell'editor Live (ProseMirror e il codice Live impostano gli stili solo dal CSSOM; `style-src 'unsafe-inline'` resta per CodeMirror, KaTeX ed Excalidraw). [ADR-0027](docs/adr/0027-slides-note.md): i file `.marp` sono una funzione distinta dalle slide delle note.
+
+### Contratti
+
+- `api/openapi.yaml`: `info.version` a 2.0.1 (stub rigenerati); nessuna operazione nuova né cambiata.
+
+### Verificato
+
+Sull'albero della 2.0.1, tutti i passi di `task ci` verdi: `lint`, `vet-windows`, `vet-linux`, typecheck, `govulncheck`, `wailsjs`, `test-go`, conformance, `test-wasm`, `test-core`, `web-budget`, `task parity` e `check-gen`. Il primo giro di `test-ts` si è fermato su un solo test di tempi (`editor/live/fidelity/perf.test.ts`, nota di circa 150 kB: 17,4 s contro 15 s, con la macchina sotto carico per `vet-linux` in Docker); rilanciato da solo è passato in 8,9 s, e `test-ts` ripetuto per intero è verde (workbench: 2778 test passati, 46 saltati). Il codice è quello della 2.0.0.
 
 ## [2.0.0] - 2026-11-27
 
